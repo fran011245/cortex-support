@@ -5,7 +5,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { loadSettings, saveSettings, updateSettings as libUpdateSettings, type CSSettings } from "@/lib/settings";
+import { loadSettings, updateSettings as libUpdateSettings, type CSSettings } from "@/lib/settings";
 
 export interface Message {
   id: string;
@@ -83,7 +83,9 @@ export const useAgentStore = create<AgentState>()(
 
       init: async () => {
         const settings = await loadSettings();
-        set({ settings, currentModelId: settings.defaultModelId || "" });
+        // currentModelId holds the *runtime handle* (hash returned by loadModel) for this session only.
+        // It is NOT the persisted src spec. Default to empty so send logic will ensure-load using settings.defaultModelId.
+        set({ settings, currentModelId: "" });
 
         // Bootstrap first session if none
         const { sessions, currentSession } = get();
@@ -187,12 +189,10 @@ export const useAgentStore = create<AgentState>()(
       setLoading: (loading) => set({ isLoading: loading }),
 
       setModelId: (id) => {
+        // id here must be the runtime handle returned by loadModel (short hash), used for complete/stream calls.
+        // Never overwrite settings.defaultModelId here — that holds the load *spec* (registry ID or path) and is
+        // only mutated through settings flows (Apply, or explicit in load button after choosing src).
         set({ currentModelId: id });
-        // also persist to settings if desired
-        const { settings } = get();
-        if (settings) {
-          saveSettings({ ...settings, defaultModelId: id }).catch(console.error);
-        }
       },
 
       setSettingsOpen: (open) => set({ isSettingsOpen: open }),
@@ -233,7 +233,7 @@ export const useAgentStore = create<AgentState>()(
       partialize: (state) => ({
         sessions: state.sessions,
         currentSession: state.currentSession,
-        currentModelId: state.currentModelId,
+        // Do not persist currentModelId: it is a per-process runtime handle (hash) from loadModel, invalid after restart.
       }),
     },
   ),

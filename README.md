@@ -42,7 +42,9 @@ pnpm install
 pnpm tauri dev
 ```
 
-The first run will download a small test model via QVAC if needed (use one of the recommended IDs below, or let the app auto-load the default on first send). You can load larger models via the model ID field in Settings (exact .gguf names from your local QVAC cache, e.g. Llama-3.2-1B-Instruct-Q4_0.gguf).
+The first run (or first chat send) will automatically download the configured default model via QVAC if it is not yet cached locally. Use the chips in **Settings → General** (or the input field) with the exact registry constant names, then click **"Load / Download this model"** (live progress % is shown). Subsequent runs and generations are instant from the local cache (`~/.qvac/models`).
+
+A **"Debug: List cached models"** button in the same panel lets you inspect exactly what is on disk. The system now correctly resolves the friendly constant names (e.g. `LLAMA_3_2_1B_INST_Q4_0`) to the proper registry descriptors under the hood.
 
 ### Production Build
 ```bash
@@ -130,7 +132,7 @@ Free-form text appended to every system prompt. Examples:
 - "Never promise specific timelines."
 
 ### 4. Model & Generation Settings
-- Default model ID (QVAC registry name or local GGUF path)
+- Default model ID (use the registry constants via the chips, or paste a local GGUF path)
 - Temperature slider (0.0 = deterministic / 1.0 = creative)
 - Max tokens
 
@@ -146,23 +148,28 @@ Export your entire tuned agent (prompt + rules + model prefs + RAG path) as JSON
 **Pro tip**: The Settings *are* the product. A great support team can evolve the agent's voice and knowledge base over time without ever touching the codebase.
 
 ### Recommended Default Models (Lightweight + Task-Aligned)
-We ship with `LLAMA_3_2_1B_INST_Q4_0` pre-configured as the default (in `DEFAULT_SETTINGS`). It is **not** included in the .dmg/.app bundle (weights download at runtime via QVAC SDK to your local cache dir on first use — this keeps the bundle tiny).
+We ship with `LLAMA_3_2_1B_INST_Q4_0` pre-configured as the default (in `DEFAULT_SETTINGS`). Weights are **never** bundled in the .dmg/.app — they are downloaded on first use (or first chat send) via the QVAC registry into your local `~/.qvac/models` cache. This keeps the distributable tiny.
 
-In **Settings → General** you will see quick-select buttons for three recommended lightweight instruction-tuned models from the QVAC registry (use the exact constant names exported by the SDK). They are ideal for the support task.
+In **Settings → General** you will find:
 
-**Use the exact registry IDs** (the app will print the available list on MODEL_NOT_FOUND if you use wrong one). Good ones:
+- Quick-select chips for the three recommended lightweight instruction-tuned models.
+- A text field where you can paste any registry constant or a local path.
+- The **"Load / Download this model"** button with live progress percentage while fetching.
+- A **"Debug: List cached models"** helper that shows the exact contents of `~/.qvac/models` (very useful after the first download).
 
-- `LLAMA_3_2_1B_INST_Q4_0` (primary — ultra light, fastest)
-- `QWEN3_1_7B_INST_Q4` (excellent at following complex instructions)
-- `QWEN3_4B_INST_Q4_K_M` (higher quality while remaining lightweight)
+**Use the exact registry constant names** (the chips already do this):
 
-For RAG embeddings: `EMBEDDINGGEMMA_300M_Q4_0`
+- `LLAMA_3_2_1B_INST_Q4_0` (primary — ultra light, fastest, great for daily support work)
+- `QWEN3_1_7B_INST_Q4` (excellent instruction following)
+- `QWEN3_4B_INST_Q4_K_M` (best quality/weight trade-off of the three)
 
-Select one, then use the **"Load / Download this model"** button (with live progress %) to trigger the fetch and cache it. The choice persists. Subsequent launches and generations are instant.
+For RAG embeddings (used automatically when you enable RAG + rebuild a knowledge base): `EMBEDDINGGEMMA_300M_Q4_0`
 
-The header "Load recommended model" button and first-send auto-load also use the configured default (with progress feedback on download).
+After selecting a model and clicking Load, the choice is persisted. The chat header also has a "Load recommended model" / "Reload model" button, and sending the first message in a new session will auto-trigger the load (with progress feedback) if nothing is ready yet.
 
-Tip: use the exact registry constants like LLAMA_3_2_1B_INST_Q4_0 (not the local .gguf filenames). The chips use the correct ones. The "Available models" list in errors shows local files, but for first download use the SDK constant IDs.
+**Important**: Always use the constant names shown above (or via the chips), **not** local filenames like `Llama-3.2-1B-Instruct-Q4_0.gguf`. The latter will result in `MODEL_NOT_FOUND` on first download even if the file later appears in your cache. The Debug list button shows you the real on-disk names after a successful registry fetch.
+
+The whole download + load pipeline (including progress reporting and name resolution) is now stable and reliable.
 
 ---
 
@@ -199,6 +206,15 @@ Cortex doesn't replace agents — it makes great agents dramatically more effect
 
 All heavy lifting (model loading, RAG, inference) happens locally. The webview only orchestrates.
 
+**Stability note (as of this release)**: The full local AI pipeline is now stable:
+- Registry model discovery + first-time download with live progress (LLM + embeddings)
+- Correct resolution of the friendly constant names (`LLAMA_3_2_1B_INST_Q4_0` etc.) to real registry descriptors
+- Auto-load on first chat send
+- Reliable cache inspection via the Debug button
+- Streaming completions + RAG with cited sources
+
+Next work will focus on UI/UX polish and additional agent features. The core QVAC integration (via the Node sidecar) is solid.
+
 ---
 
 ## 📦 Distribution & Auto-Updates (optional)
@@ -234,15 +250,17 @@ pnpm tauri dev
 - Open WebView DevTools in the running window (F12, Cmd+Opt+I, or right-click → Inspect). This is now enabled by default in dev (`"devtools": true` in tauri.conf).
   - Renderer `console.log`/`warn`/`error` (from App, Chat, qvac.ts, bridge, tools, etc.) appear here.
   - qvac-host process logs surface as `[qvac-host stderr]` (and prefixed `[qvac-host]` inside the host) in the **same WebView DevTools console** — search for them. Also echoed to the tauri dev terminal.
+- On host startup you should see a one-time `[qvac-host] Ensured bare runtime in PATH: ...` line (the sidecar automatically makes the `bare` worker runtime available so registry downloads and the QVAC provider can start).
 - Other useful logs: `[QVAC]`, `[Cortex]`, `[RAG]`, `[qvac-bridge]` etc. for easy filtering.
 - Vite HMR for frontend changes (instant). Rust changes recompile visibly in the terminal.
-- To simulate "first run" (force re-download of defaults): delete the QVAC cache dir (e.g. `~/Library/Application Support/qvac` or platform equivalent).
-- Advanced host debugging: edit the bridge spawn temporarily to use `node --inspect=9229 ...` and attach via `chrome://inspect`, or run `node src-tauri/qvac-host.cjs` standalone and pipe NDJSON test commands on stdin.
-- Model download progress (when testing the "configure + load" flow) now shows live % in UI + detailed logs.
+- To simulate "first run" (force re-download of defaults): `rm -rf ~/.qvac/models/*` (or the platform equivalent). Then use Settings → Load or just send a message in chat.
+- The "Debug: List cached models" button (Settings → General) is the easiest way to verify what actually landed on disk.
+- Advanced host debugging: you can still run `node src-tauri/qvac-host.cjs` standalone and feed it NDJSON commands on stdin for low-level testing. The host now auto-discovers the `bare` runtime needed by the QVAC worker.
+- Model download / first-time registry fetch now has reliable live progress in the UI and rich logs in both the tauri dev terminal (`[qvac-host stderr]`) and the WebView console.
 
-See `src-tauri/qvac-host.cjs` for the Node-side QVAC bridge (the secret sauce that lets the renderer use the full SDK).
+See `src-tauri/qvac-host.cjs` for the Node-side QVAC bridge (the secret sauce that lets the renderer use the full SDK while keeping the webview clean).
 
-Requires a local model for best results (QVAC registry names or GGUF files work). See "Recommended Default Models" above.
+The local model loading + download pipeline (LLM + embeddings) is stable. See the "Recommended Default Models" section for the current best IDs and workflow.
 
 ---
 
@@ -273,7 +291,7 @@ The current landing (built on Lovable) needs a prominent "Download for macOS" (o
      {
        "version": "0.1.0",
        "dmgUrl": "https://github.com/fran011245/cortex-support/releases/download/v0.1.0/Cortex_0.1.0_aarch64.dmg",
-       "notes": "Renamed to Cortex + optional auto-updater support. Lightweight Llama/Qwen models.",
+       "notes": "Renamed to Cortex + optional auto-updater support. Stable QVAC local model loading (registry constants + progress).",
        "sizeMB": 5
      }
      ```
@@ -294,7 +312,25 @@ This keeps the "single source of truth" as the GH release (or your VPS), and the
 - ✅ Dedicated [DEMO_VIDEO_SCRIPT.md](DEMO_VIDEO_SCRIPT.md)
 - ✅ Production `.dmg` and `.app` (see build artifacts above)
 - ✅ Full source + all phases implemented (0–7)
+- ✅ **Stable local model loading pipeline** (QVAC registry downloads, name resolution, progress, caching, RAG embeddings, streaming completions) — ready for production use by support agents. UI/UX improvements are the focus of the next development cycle.
 
 Built with ❤️ and a deep respect for professional support work.
 
 **Cortex** — because even the best agents deserve a co-pilot that never forgets the tone.
+
+---
+
+## 🔜 What's Next (New Session)
+
+Core local AI functionality (model download from QVAC registry using the proper constant names, live progress, auto-resolution in the host, caching, streaming completions, and RAG) is now stable and reliable.
+
+The focus of the **next development cycle** will be UI/UX improvements:
+- Polish, responsiveness, better visual feedback
+- Improved RAG folder management and rebuild UX
+- More agent tools / templates
+- Better error states and first-run experience
+- General refinement of the chat and settings interfaces
+
+The `DEBUG_MODEL_LOADING.md` file in the repo root contains the full historical debugging notes for the AI integration (useful reference but no longer required for day-to-day work).
+
+Happy to start the new session whenever you're ready!

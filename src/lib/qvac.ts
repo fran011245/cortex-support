@@ -17,11 +17,12 @@ import {
   bridgeEmbed,
   type HostFinal,
 } from "./qvac-bridge";
+import { DEFAULT_EMBED_MODEL } from "./settings";
 
-export type QVACModelType = "llm" | "embeddings";
+export type QVACModelType = "llm" | "embeddings" | "llamacpp-completion";
 
 export interface QVACLoadOptions {
-  modelSrc: string; // local path, url, or registry id like LLAMA_...
+  modelSrc: string; // local path, url, or registry id like LLAMA_3_2_1B_INST_Q4_0 (use exact SDK constants)
   modelType?: QVACModelType;
   modelConfig?: Record<string, any>;
   onProgress?: (progress: { percentage: number; bytesLoaded?: number; bytesTotal?: number }) => void;
@@ -81,8 +82,9 @@ export async function shutdownQVAC(): Promise<void> {
 }
 
 /**
- * Load a model (LLM or embeddings). Returns the modelId to use for completions/embed.
- * `modelSrc` can be a registry constant (e.g. BITNET_1B_INST_TQ2_0), local path, or URL.
+ * Load a model (LLM or embeddings). Returns the *runtime handle* (short hash) to use for completions/embed/rag.
+ * `modelSrc` can be a registry constant (e.g. LLAMA_3_2_1B_INST_Q4_0), local path, or URL.
+ * Always pass exact registry constants for first-time loads (see DEBUG_MODEL_LOADING.md).
  */
 export async function loadLocalModel(options: QVACLoadOptions): Promise<string> {
   const { modelSrc, modelType = "llamacpp-completion", modelConfig = {}, onProgress } = options;
@@ -92,7 +94,7 @@ export async function loadLocalModel(options: QVACLoadOptions): Promise<string> 
       modelSrc,
       modelType,
       modelConfig: {
-        ctx_size: 8192,
+        ctx_size: 4096,
         ...modelConfig,
       },
     },
@@ -159,12 +161,12 @@ export async function generateEmbeddings(texts: string[], modelId: string): Prom
 }
 
 /** RAG surface (Phase 5) */
-export async function rebuildKnowledgeBase(folderPath: string, embedModelId = "embeddinggemma-300m-Q4_0.gguf") {
+export async function rebuildKnowledgeBase(folderPath: string, embedModelId = DEFAULT_EMBED_MODEL) {
   const { bridgeRagRebuild } = await import("./qvac-bridge");
   return bridgeRagRebuild({ folderPath, embedModelId });
 }
 
-export async function searchKnowledgeBase(query: string, workspace = "cortex-kb", embedModelId = "embeddinggemma-300m-Q4_0.gguf", topK = 5) {
+export async function searchKnowledgeBase(query: string, workspace = "cortex-kb", embedModelId = DEFAULT_EMBED_MODEL, topK = 5) {
   const { bridgeRagSearch } = await import("./qvac-bridge");
   return bridgeRagSearch({ query, workspace, embedModelId, topK });
 }

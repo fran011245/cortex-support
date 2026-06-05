@@ -345,13 +345,17 @@ export function SettingsModal() {
                       const src = local.defaultModelId || DEFAULT_LLM_MODEL;
                       setModelLoadProgress(null);
                       try {
-                        await loadLocalModel({
+                        // loadLocalModel returns the *runtime handle* (short hash), required for stream/complete calls.
+                        // settings.defaultModelId keeps the src spec (registry const) for future loads.
+                        const handle = await loadLocalModel({
                           modelSrc: src,
                           modelType: "llamacpp-completion",
                           modelConfig: { ctx_size: 4096 },
                           onProgress: (p) => setModelLoadProgress(p),
                         });
-                        setModelId(src);
+                        setModelId(handle);
+                        // Persist the chosen src spec so it becomes the remembered default for next app start.
+                        await updateSettings({ defaultModelId: src });
                         toast.success("Model ready", { description: src });
                       } catch (e: any) {
                         toast.error("Load failed", { description: e?.message || "See console" });

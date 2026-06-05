@@ -57,21 +57,23 @@ export function ChatInterface() {
   // Load the recommended default (or current settings default). Supports onProgress for download feedback.
   const [loadProgress, setLoadProgress] = useState<{ percentage?: number } | null>(null);
 
-  const loadTestModel = async (modelSrcOverride?: string) => {
+  const loadTestModel = async (modelSrcOverride?: string, silent = false) => {
     setIsLoadingModel(true);
     setLoadProgress(null);
     try {
       await initQVAC();
       const src = modelSrcOverride || DEFAULT_LLM_MODEL;
-      const modelId = await loadLocalModel({
+      const handle = await loadLocalModel({
         modelSrc: src,
         modelType: "llamacpp-completion",
         modelConfig: { ctx_size: 4096 },
         onProgress: (p) => setLoadProgress(p),
       });
-      setModelId(modelId);
-      const label = RECOMMENDED_LLM_MODELS.find((m) => m.id === src)?.label || src;
-      toast.success("Model loaded", { description: `${label} ready` });
+      setModelId(handle); // runtime handle (hash), not the src
+      if (!silent) {
+        const label = RECOMMENDED_LLM_MODELS.find((m) => m.id === src)?.label || src;
+        toast.success("Model loaded", { description: `${label} ready` });
+      }
     } catch (e: any) {
       console.error(e);
       toast.error("Failed to load model", {
@@ -145,18 +147,24 @@ export function ChatInterface() {
       }
     }
 
-    // Auto-load recommended default if none selected (dev convenience; real usage picks from Settings).
-    // If a defaultModelId is configured in Settings, loadTestModel will use it (triggering download + progress if needed).
-    let modelId = state.currentModelId || state.settings?.defaultModelId || "";
+    // Ensure a model is loaded for the desired src (from settings or default). currentModelId holds the *runtime handle*
+    // (the hash returned by loadLocalModel), which must be passed to streamCompletion. The src spec (registry ID)
+    // is what we load *with*. We always ensure-load here so first message after start (or after settings change)
+    // works without requiring manual "Load" click.
+    const desiredSrc = state.settings?.defaultModelId || DEFAULT_LLM_MODEL;
+    let modelId = state.currentModelId;
     if (!modelId) {
-      toast.info(`Loading recommended model (${DEFAULT_LLM_MODEL}) for the CS Agent...`);
+      toast.info(`Loading model (${desiredSrc}) for the CS Agent...`);
       try {
-        await loadTestModel();
+        await loadTestModel(desiredSrc, true /*silent, info toast already shown*/);
         state = useAgentStore.getState();
         modelId = state.currentModelId || "";
       } catch {
         // Will surface error in the stream call below
       }
+    }
+    if (!modelId) {
+      modelId = desiredSrc; // last resort (will likely fail in SDK with MODEL_NOT_FOUND if not loaded)
     }
 
     const controller = new AbortController();

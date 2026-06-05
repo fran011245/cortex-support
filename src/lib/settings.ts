@@ -7,6 +7,24 @@
 import { Store } from "@tauri-apps/plugin-store";
 import { DEFAULT_SYSTEM_PROMPT, DEFAULT_TONE_RULES, type ToneRules } from "./prompts";
 
+/**
+ * Canonical registry constant *names* (strings) from @qvac/sdk.
+ *
+ * We deliberately keep only the strings here (no `import ... from "@qvac/sdk"`).
+ * @qvac/sdk is a Node + Bare runtime package with native addons, hyperswarm, etc.
+ * It must *never* be imported or bundled into the Tauri webview/renderer (see
+ * vite.config.ts: optimizeDeps.exclude + rollupOptions.external).
+ *
+ * The actual descriptor *objects* (the ones with `.src = "registry://..."`) are only
+ * resolved at runtime inside the Node sidecar (src-tauri/qvac-host.cjs: resolveModelSrc).
+ * Passing the string name from the UI is sufficient; the host upgrades it before
+ * calling the real sdk.loadModel().
+ */
+const LLAMA_3_2_1B_INST_Q4_0 = "LLAMA_3_2_1B_INST_Q4_0" as const;
+const QWEN3_1_7B_INST_Q4 = "QWEN3_1_7B_INST_Q4" as const;
+const QWEN3_4B_INST_Q4_K_M = "QWEN3_4B_INST_Q4_K_M" as const;
+const EMBEDDINGGEMMA_300M_Q4_0 = "EMBEDDINGGEMMA_300M_Q4_0" as const;
+
 export interface CSSettings {
   // 1. Agent core
   systemPrompt: string;
@@ -40,15 +58,20 @@ export interface CSSettings {
  * generating clear/concise/security-aware replies, using RAG context).
  * All small quantized instruction-tuned models; fast to download/start on Apple Silicon.
  * User can override in Settings with any registry id, local GGUF path, or supported URL.
+ *
+ * The `id` values are the exact string names of the SDK registry constants.
+ * When loadModel is called with one of these strings, the Node host (qvac-host.cjs)
+ * resolves it to the real descriptor object so registry downloads happen.
+ * See resolveModelSrc in src-tauri/qvac-host.cjs and the DEBUG doc.
  */
 export const RECOMMENDED_LLM_MODELS = [
-  { id: "LLAMA_3_2_1B_INST_Q4_0", label: "Llama 3.2 1B Instruct (Q4_0, ultra-light ~0.5-1GB, fast)" },
-  { id: "QWEN3_1_7B_INST_Q4", label: "Qwen3 1.7B Instruct (Q4, excellent instruction following)" },
-  { id: "QWEN3_4B_INST_Q4_K_M", label: "Qwen3 4B Instruct (Q4_K_M, strong quality still lightweight)" },
+  { id: LLAMA_3_2_1B_INST_Q4_0, label: "Llama 3.2 1B Instruct (Q4_0, ultra-light ~0.5-1GB, fast)" },
+  { id: QWEN3_1_7B_INST_Q4, label: "Qwen3 1.7B Instruct (Q4, excellent instruction following)" },
+  { id: QWEN3_4B_INST_Q4_K_M, label: "Qwen3 4B Instruct (Q4_K_M, strong quality still lightweight)" },
 ] as const;
 
 export const DEFAULT_LLM_MODEL = RECOMMENDED_LLM_MODELS[0].id; // Primary: Llama 3.2 1B
-export const DEFAULT_EMBED_MODEL = "EMBEDDINGGEMMA_300M_Q4_0";
+export const DEFAULT_EMBED_MODEL = EMBEDDINGGEMMA_300M_Q4_0;
 
 export const DEFAULT_SETTINGS: CSSettings = {
   systemPrompt: DEFAULT_SYSTEM_PROMPT,

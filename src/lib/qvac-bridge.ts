@@ -84,15 +84,22 @@ async function ensureChild(): Promise<Child> {
   const cmd = Command.create("node", [scriptPath]);
 
   // IMPORTANT: stdout/stderr listeners go on the *Command* (before spawn), per the plugin API.
+  // Use a line buffer so that NDJSON progress messages (which can arrive in arbitrary chunks
+  // during long registry downloads) are never split mid-line and dropped as "Non-JSON".
+  let stdoutBuffer = "";
   cmd.stdout.on("data", (data: string | Uint8Array) => {
     const text = typeof data === "string" ? data : new TextDecoder().decode(data);
-    const lines = text.split("\n").filter(Boolean);
+    stdoutBuffer += text;
+    const lines = stdoutBuffer.split("\n");
+    stdoutBuffer = lines.pop() || ""; // keep the (possibly partial) last line for next chunk
     for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
       try {
-        const msg = JSON.parse(line);
+        const msg = JSON.parse(trimmed);
         routeMessage(msg);
       } catch (e) {
-        console.warn("[qvac-bridge] Non-JSON from host stdout:", line);
+        console.warn("[qvac-bridge] Non-JSON from host stdout:", trimmed);
       }
     }
   });

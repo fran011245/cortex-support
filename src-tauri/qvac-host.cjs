@@ -21,6 +21,10 @@
 const readline = require("readline");
 const fs = require("fs");
 const path = require("path");
+
+// Capture the full SDK module for name -> descriptor lookup in resolveModelSrc.
+// We also destructure the symbols we call directly.
+const sdk = require("@qvac/sdk");
 const {
   startQVACProvider,
   stopQVACProvider,
@@ -31,7 +35,98 @@ const {
   cancel,
   ragIngest,
   ragSearch,
-} = require("@qvac/sdk");
+} = sdk;
+
+/**
+ * Ensure the "bare" runtime (required by @qvac/sdk to spawn its worker for registry
+ * downloads, provider, inference addons, etc.) is discoverable in PATH for the
+ * child_process.spawn("bare", ...) that the SDK performs inside this host process.
+ *
+ * We resolve via the packages that are already in our dependency tree (transitive
+ * from @qvac/sdk) so we get the platform-specific binary (e.g. bare-runtime-darwin-arm64).
+ * Then we prepend its directory to process.env.PATH *of this node process* before any
+ * start/load that would trigger ensureRPC in the SDK's node-rpc-client.
+ *
+ * This is the key fix that allows first-time registry model downloads to actually run
+ * (without it you get spawn ENOENT for "bare" and the worker never starts).
+ */
+function findAndPrependBareBinToPATH() {
+  const candidates = [];
+  try {
+    // Primary: bare-runtime (provides the arch-specific bins)
+    const brPkg = require.resolve("bare-runtime/package.json");
+    const brDir = path.dirname(brPkg);
+    candidates.push(path.join(brDir, "bin", "bare"));
+    candidates.push(path.join(brDir, "node_modules", ".bin", "bare"));
+  } catch (e) {}
+  try {
+    // Some pnpm layouts expose a top-level one
+    const br2 = require.resolve("bare-runtime-darwin-arm64/package.json");
+    const d = path.dirname(br2);
+    candidates.push(path.join(d, "bin", "bare"));
+  } catch (e) {}
+  try {
+    // The one nested under the sdk install
+    const sdkPkg = require.resolve("@qvac/sdk/package.json");
+    const sdkDir = path.dirname(sdkPkg);
+    candidates.push(path.join(sdkDir, "node_modules", ".bin", "bare"));
+  } catch (e) {}
+  // Also the pnpm central bin if present in this tree
+  candidates.push(path.join(__dirname, "..", "node_modules", ".pnpm", "node_modules", ".bin", "bare"));
+
+  for (const c of candidates) {
+    try {
+      if (fs.existsSync(c)) {
+        const bareDir = path.dirname(c);
+        if (!process.env.PATH || !process.env.PATH.includes(bareDir)) {
+          process.env.PATH = bareDir + path.delimiter + (process.env.PATH || "");
+        }
+        console.error("[qvac-host] Ensured bare runtime in PATH:", c);
+        return;
+      }
+    } catch (e) {}
+  }
+
+  // Last resort: try which (may work in dev shells)
+  try {
+    const { execSync } = require("child_process");
+    const found = execSync("which bare 2>/dev/null || true", { encoding: "utf8" }).trim();
+    if (found && fs.existsSync(found)) {
+      const bareDir = path.dirname(found);
+      if (!process.env.PATH || !process.env.PATH.includes(bareDir)) {
+        process.env.PATH = bareDir + path.delimiter + (process.env.PATH || "");
+      }
+      console.error("[qvac-host] Ensured bare runtime in PATH via which:", found);
+      return;
+    }
+  } catch (e) {}
+
+  console.error("[qvac-host] WARNING: could not auto-locate 'bare' executable. Worker spawn (needed for model downloads + provider) may fail with ENOENT. Ensure bare-runtime provides a 'bare' in PATH for this node process.");
+}
+
+// Run the PATH fix *immediately* (before any SDK call that may spawn the worker).
+findAndPrependBareBinToPATH();
+
+/**
+ * Resolve a registry *string name* (e.g. the ids we persist in settings.defaultModelId
+ * and pass from the UI) to the actual SDK descriptor object when possible.
+ * The descriptor (with .src = "registry://...", .registryPath, checksums, etc.) is what
+ * makes @qvac/sdk take the download-from-registry code path instead of
+ * "local file / ModelNotFound".
+ *
+ * If it's already an object (or a full path/url), pass through unchanged.
+ * This lives in the host because:
+ *   - the real sdk.loadModel call happens here
+ *   - internal rag embed loads (which also do loadModel) are here
+ *   - the JSON over stdin can carry the object (or its serialized form) from the UI
+ *   - custom user paths like "/foo/my.gguf" stay strings
+ */
+function resolveModelSrc(input) {
+  if (typeof input === "string" && input && sdk[input]) {
+    return sdk[input];
+  }
+  return input;
+}
 
 // Map of active streaming requestId (from SDK) -> clientId for routing events
 const activeStreams = new Map(); // sdkRequestId -> clientId
@@ -68,8 +163,12 @@ async function handleCommand(clientId, cmd, params = {}) {
       }
 
       case "loadModel": {
-        const { modelSrc, modelType = "llamacpp-completion", modelConfig = {} } = params;
-        if (!modelSrc) throw new Error("modelSrc is required");
+        const { modelSrc: rawSrc, modelType = "llamacpp-completion", modelConfig = {} } = params;
+        if (!rawSrc) throw new Error("modelSrc is required");
+
+        // Resolve string registry names (the ones persisted in settings / used in UI)
+        // to the full descriptor objects the SDK needs for real registry:// downloads.
+        const modelSrc = resolveModelSrc(rawSrc);
 
         const opts = {
           modelSrc,
@@ -203,13 +302,14 @@ async function handleCommand(clientId, cmd, params = {}) {
       }
 
       case "ragRebuild": {
-        const { folderPath, workspace = "cortex-kb", embedModelId = "embeddinggemma-300m-Q4_0.gguf" } = params;
+        const { folderPath, workspace = "cortex-kb", embedModelId: rawEmbed = "EMBEDDINGGEMMA_300M_Q4_0" } = params;
         if (!folderPath) throw new Error("folderPath is required");
         const docs = collectTextFiles(folderPath);
         if (!docs.length) {
           send({ id: clientId, type: "ack", result: { docCount: 0, chunkCount: 0 } });
           break;
         }
+        const embedModelId = resolveModelSrc(rawEmbed);
         const embedModel = await loadModel({ modelSrc: embedModelId, modelType: "embeddings" });
         const ingestResult = await ragIngest({
           modelId: embedModel,
@@ -223,8 +323,9 @@ async function handleCommand(clientId, cmd, params = {}) {
       }
 
       case "ragSearch": {
-        const { query, workspace = "cortex-kb", embedModelId = "embeddinggemma-300m-Q4_0.gguf", topK = 5 } = params;
+        const { query, workspace = "cortex-kb", embedModelId: rawEmbed = "EMBEDDINGGEMMA_300M_Q4_0", topK = 5 } = params;
         if (!query) throw new Error("query is required");
+        const embedModelId = resolveModelSrc(rawEmbed);
         const embedModel = await loadModel({ modelSrc: embedModelId, modelType: "embeddings" });
         const results = await ragSearch({ modelId: embedModel, query, workspace, topK });
         send({ id: clientId, type: "ack", result: { results: results || [] } });
