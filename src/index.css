@@ -1,0 +1,188 @@
+@import "tailwindcss";
+
+/* Thoth — Premium Bitfinex/Tether inspired dark theme (2026 SaaS) */
+@theme inline {
+  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* Core palette - Deep navy finance aesthetic */
+  --color-background: #0A0F1C;
+  --color-foreground: #E2E8F0;
+
+  --color-card: #121827;
+  --color-card-foreground: #E2E8F0;
+
+  --color-popover: #121827;
+  --color-popover-foreground: #E2E8F0;
+
+  --color-primary: #3B82F6;
+  --color-primary-foreground: #FFFFFF;
+
+  --color-secondary: #1E293B;
+  --color-secondary-foreground: #CBD5E1;
+
+  --color-muted: #1E293B;
+  --color-muted-foreground: #64748B;
+
+  --color-accent: #0EA5E9;
+  --color-accent-foreground: #FFFFFF;
+
+  --color-destructive: #EF4444;
+  --color-destructive-foreground: #FFFFFF;
+
+  --color-border: #1E293B;
+  --color-input: #1E293B;
+  --color-ring: #3B82F6;
+
+  --radius: 0.625rem;
+}
+
+:root {
+  font-family: var(--font-sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Base app styles */
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  margin: 0;
+  min-height: 100vh;
+}
+
+/* High-end SaaS glassmorphism / cards */
+.glass {
+  background-color: color-mix(in srgb, var(--color-card) 85%, transparent);
+  border: 1px solid color-mix(in srgb, #ffffff 8%, transparent);
+  backdrop-filter: blur(20px);
+}
+
+.card {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.btn-primary {
+  background-color: var(--color-primary);
+  color: var(--color-primary-foreground);
+  border: none;
+  transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-primary:hover {
+  background-color: #2563EB;
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-ghost {
+  background-color: transparent;
+  color: var(--color-foreground);
+  border: 1px solid var(--color-border);
+  transition: all 0.1s ease;
+}
+
+.btn-ghost:hover {
+  background-color: var(--color-secondary);
+  border-color: var(--color-primary);
+}
+
+/* Typography */
+h1, h2, h3, h4 {
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+/* Scrollbars - subtle dark */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Focus styles for accessibility */
+*:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Input styles */
+input, textarea, select {
+  background-color: var(--color-input);
+  border: 1px solid var(--color-border);
+  color: var(--color-foreground);
+  border-radius: var(--radius);
+  transition: border-color 0.1s ease, box-shadow 0.1s ease;
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  outline: none;
+}
+
+/* Professional code / pre blocks */
+pre, code {
+  font-family: var(--font-mono);
+}
+
+/* Smooth everything */
+* {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 100ms;
+}
+
+/* High-end SaaS polish */
+.card, .glass {
+  transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.1s ease, border-color 0.1s ease;
+}
+.card:hover, .glass:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+/* Skeleton for loading states */
+.skeleton {
+  background: linear-gradient(90deg, #1E293B 25%, #334155 50%, #1E293B 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Better button micro-interactions */
+button {
+  transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+button:active {
+  transform: scale(0.985);
+}
+
+/* Dialog polish */
+[role="dialog"] {
+  animation: dialogEnter 0.2s cubic-bezier(0.32, 0.72, 0, 1);
+}
+@keyframes dialogEnter {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
