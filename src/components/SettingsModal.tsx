@@ -317,7 +317,7 @@ export function SettingsModal() {
                 <Input
                   value={local.defaultModelId}
                   onChange={(e) => setLocal({ ...local, defaultModelId: e.target.value })}
-                  placeholder="e.g. Llama-3.2-1B-Instruct-Q4_0.gguf or /path/to/model.gguf"
+                  placeholder="e.g. Llama-3.2-1B-Instruct-Q4_0 or /path/to/model.gguf"
                   className="bg-[#121827] border-[#1E293B] font-mono text-sm"
                 />
                 <p className="text-[11px] text-muted-foreground">QVAC model ID, local path, or registry constant. Click a recommendation below, then Load to download (if needed) and cache it.</p>
