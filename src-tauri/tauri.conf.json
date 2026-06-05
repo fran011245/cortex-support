@@ -41,7 +41,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZBS0VfUFVCS0VZClJXUlRZM1Z5Y0Z3dFpYSmZjMkZ1WjJWMFgyeHBkMjV6YjI0dWMybHpkR1Z1WjJWMFgyeHBkMjV6YjI0PQp",
+      "pubkey": "",
       "endpoints": [
         "https://github.com/fran011245/cortex-support/releases/latest/download/latest.json"
       ],
