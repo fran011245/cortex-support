@@ -65,7 +65,7 @@ export function ChatInterface() {
       const src = modelSrcOverride || DEFAULT_LLM_MODEL;
       const modelId = await loadLocalModel({
         modelSrc: src,
-        modelType: "llm",
+        modelType: "llamacpp-completion",
         modelConfig: { ctx_size: 4096 },
         onProgress: (p) => setLoadProgress(p),
       });

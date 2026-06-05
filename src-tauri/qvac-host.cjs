@@ -68,7 +68,7 @@ async function handleCommand(clientId, cmd, params = {}) {
       }
 
       case "loadModel": {
-        const { modelSrc, modelType = "llm", modelConfig = {} } = params;
+        const { modelSrc, modelType = "llamacpp-completion", modelConfig = {} } = params;
         if (!modelSrc) throw new Error("modelSrc is required");
 
         const opts = {
@@ -203,7 +203,7 @@ async function handleCommand(clientId, cmd, params = {}) {
       }
 
       case "ragRebuild": {
-        const { folderPath, workspace = "cortex-kb", embedModelId = "EMBEDDINGGEMMA_300M_Q4_0" } = params;
+        const { folderPath, workspace = "cortex-kb", embedModelId = "embeddinggemma-300m-Q4_0.gguf" } = params;
         if (!folderPath) throw new Error("folderPath is required");
         const docs = collectTextFiles(folderPath);
         if (!docs.length) {
@@ -223,7 +223,7 @@ async function handleCommand(clientId, cmd, params = {}) {
       }
 
       case "ragSearch": {
-        const { query, workspace = "cortex-kb", embedModelId = "EMBEDDINGGEMMA_300M_Q4_0", topK = 5 } = params;
+        const { query, workspace = "cortex-kb", embedModelId = "embeddinggemma-300m-Q4_0.gguf", topK = 5 } = params;
         if (!query) throw new Error("query is required");
         const embedModel = await loadModel({ modelSrc: embedModelId, modelType: "embeddings" });
         const results = await ragSearch({ modelId: embedModel, query, workspace, topK });

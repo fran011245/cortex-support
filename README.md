@@ -42,7 +42,7 @@ pnpm install
 pnpm tauri dev
 ```
 
-The first run will download a small test model via QVAC if needed (BITNET 1B or similar for fast iteration). You can load larger models (Llama 3.2 3B Q4, etc.) via the model ID field in Settings.
+The first run will download a small test model via QVAC if needed (use one of the recommended IDs below, or let the app auto-load the default on first send). You can load larger models via the model ID field in Settings (exact .gguf names from your local QVAC cache, e.g. Llama-3.2-1B-Instruct-Q4_0.gguf).
 
 ### Production Build
 ```bash
@@ -146,19 +146,23 @@ Export your entire tuned agent (prompt + rules + model prefs + RAG path) as JSON
 **Pro tip**: The Settings *are* the product. A great support team can evolve the agent's voice and knowledge base over time without ever touching the codebase.
 
 ### Recommended Default Models (Lightweight + Task-Aligned)
-We ship with `LLAMA_3_2_1B_INST_Q4_0` pre-configured as the default (in `DEFAULT_SETTINGS`). It is **not** included in the .dmg/.app bundle (weights download at runtime via QVAC SDK to your local cache dir on first use — this keeps the bundle tiny).
+We ship with `Llama-3.2-1B-Instruct-Q4_0.gguf` pre-configured as the default (in `DEFAULT_SETTINGS`). It is **not** included in the .dmg/.app bundle (weights download at runtime via QVAC SDK to your local cache dir on first use — this keeps the bundle tiny).
 
-In **Settings → General** you will see quick-select buttons for three recommended lightweight instruction-tuned models from the QVAC registry. They are ideal for the support task (adhering to our detailed professional support tone system prompt, producing professional/direct/pragmatic replies, incorporating RAG context when relevant):
+In **Settings → General** you will see quick-select buttons for three recommended lightweight instruction-tuned models from the QVAC registry. They are ideal for the support task (adhering to our detailed professional support tone system prompt, producing professional/direct/pragmatic replies, incorporating RAG context when relevant).
 
-- `LLAMA_3_2_1B_INST_Q4_0` (primary — ultra light, fastest download & inference)
-- `QWEN3_1_7B_INST_Q4` (excellent at following complex instructions)
-- `QWEN3_4B_INST_Q4_K_M` (higher quality while remaining lightweight)
+**Use the exact strings that exist in your local QVAC cache** (the app will print the available list on MODEL_NOT_FOUND). Current good ones usually include:
+
+- `Llama-3.2-1B-Instruct-Q4_0.gguf` (primary — ultra light, fastest download & inference)
+- `Qwen3-1.7B-Q4_0.gguf` (excellent at following complex instructions)
+- `Qwen3-4B-Q4_K_M.gguf` (higher quality while remaining lightweight)
+
+For RAG embeddings: `embeddinggemma-300m-Q4_0.gguf`
 
 Select one, then use the **"Load / Download this model"** button (with live progress %) to trigger the fetch and cache it. The choice persists. Subsequent launches and generations are instant.
 
-(DeepSeek lightweight models: not in the current QVAC registry snapshot. Paste a small compatible GGUF URL or local path into the model field if you have one.)
-
 The header "Load recommended model" button and first-send auto-load also use the configured default (with progress feedback on download).
+
+Tip: if a model ID from the list doesn't work, copy-paste the exact filename from the "Available models" error message printed in the console / toast. The SDK registry uses the .gguf basenames.
 
 ---
 

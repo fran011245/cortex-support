@@ -85,7 +85,7 @@ export async function shutdownQVAC(): Promise<void> {
  * `modelSrc` can be a registry constant (e.g. BITNET_1B_INST_TQ2_0), local path, or URL.
  */
 export async function loadLocalModel(options: QVACLoadOptions): Promise<string> {
-  const { modelSrc, modelType = "llm", modelConfig = {}, onProgress } = options;
+  const { modelSrc, modelType = "llamacpp-completion", modelConfig = {}, onProgress } = options;
 
   const modelId = await bridgeLoadModel(
     {
@@ -159,12 +159,12 @@ export async function generateEmbeddings(texts: string[], modelId: string): Prom
 }
 
 /** RAG surface (Phase 5) */
-export async function rebuildKnowledgeBase(folderPath: string, embedModelId = "EMBEDDINGGEMMA_300M_Q4_0") {
+export async function rebuildKnowledgeBase(folderPath: string, embedModelId = "embeddinggemma-300m-Q4_0.gguf") {
   const { bridgeRagRebuild } = await import("./qvac-bridge");
   return bridgeRagRebuild({ folderPath, embedModelId });
 }
 
-export async function searchKnowledgeBase(query: string, workspace = "cortex-kb", embedModelId = "EMBEDDINGGEMMA_300M_Q4_0", topK = 5) {
+export async function searchKnowledgeBase(query: string, workspace = "cortex-kb", embedModelId = "embeddinggemma-300m-Q4_0.gguf", topK = 5) {
   const { bridgeRagSearch } = await import("./qvac-bridge");
   return bridgeRagSearch({ query, workspace, embedModelId, topK });
 }

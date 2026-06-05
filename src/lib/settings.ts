@@ -42,13 +42,13 @@ export interface CSSettings {
  * User can override in Settings with any registry id, local GGUF path, or supported URL.
  */
 export const RECOMMENDED_LLM_MODELS = [
-  { id: "LLAMA_3_2_1B_INST_Q4_0", label: "Llama 3.2 1B Instruct (Q4_0, ultra-light ~0.5-1GB, fast)" },
-  { id: "QWEN3_1_7B_INST_Q4", label: "Qwen3 1.7B Instruct (Q4, excellent instruction following)" },
-  { id: "QWEN3_4B_INST_Q4_K_M", label: "Qwen3 4B Instruct (Q4_K_M, strong quality still lightweight)" },
+  { id: "Llama-3.2-1B-Instruct-Q4_0.gguf", label: "Llama 3.2 1B Instruct (Q4_0, ultra-light ~0.5-1GB, fast)" },
+  { id: "Qwen3-1.7B-Q4_0.gguf", label: "Qwen3 1.7B Instruct (Q4_0, excellent instruction following)" },
+  { id: "Qwen3-4B-Q4_K_M.gguf", label: "Qwen3 4B Instruct (Q4_K_M, strong quality still lightweight)" },
 ] as const;
 
 export const DEFAULT_LLM_MODEL = RECOMMENDED_LLM_MODELS[0].id; // Primary: Llama 3.2 1B
-export const DEFAULT_EMBED_MODEL = "EMBEDDINGGEMMA_300M_Q4_0";
+export const DEFAULT_EMBED_MODEL = "embeddinggemma-300m-Q4_0.gguf";
 
 export const DEFAULT_SETTINGS: CSSettings = {
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
