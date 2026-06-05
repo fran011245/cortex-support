@@ -315,6 +315,10 @@ export async function bridgeRagSearch(params: { query: string; workspace?: strin
   return res?.results || [];
 }
 
+export async function bridgeListModels(): Promise<{ modelsDir: string; files: string[] }> {
+  return sendCommand("listModels");
+}
+
 // Cleanup on window unload (dev convenience)
 if (typeof window !== "undefined") {
   window.addEventListener("beforeunload", () => {

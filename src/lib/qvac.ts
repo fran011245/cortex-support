@@ -174,6 +174,11 @@ export const rag = {
   search: searchKnowledgeBase,
 };
 
+export async function listCachedModels(): Promise<{ modelsDir: string; files: string[] }> {
+  const { bridgeListModels } = await import("./qvac-bridge");
+  return bridgeListModels();
+}
+
 export async function getAvailableModels(): Promise<any[]> {
   return []; // Catalog UI can be added later
 }

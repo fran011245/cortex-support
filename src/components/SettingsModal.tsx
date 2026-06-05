@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAgentStore } from "@/stores/useAgentStore";
 import { DEFAULT_SYSTEM_PROMPT, TONE_PRESETS, type ToneRules } from "@/lib/prompts";
 import type { CSSettings } from "@/lib/settings";
-import { loadLocalModel } from "@/lib/qvac";
+import { loadLocalModel, listCachedModels } from "@/lib/qvac";
 import { DEFAULT_LLM_MODEL, DEFAULT_EMBED_MODEL, RECOMMENDED_LLM_MODELS } from "@/lib/settings";
 import { toast } from "sonner";
 import { FolderOpen, RefreshCw } from "lucide-react";
@@ -31,6 +31,7 @@ export function SettingsModal() {
   const [local, setLocal] = useState(settings);
   const [isReindexing, setIsReindexing] = useState(false);
   const [modelLoadProgress, setModelLoadProgress] = useState<{ percentage?: number } | null>(null);
+  const [cachedModels, setCachedModels] = useState<{ modelsDir?: string; files?: string[] } | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<any>(null);
 
@@ -366,6 +367,35 @@ export function SettingsModal() {
                   {modelLoadProgress && (
                     <span className="ml-2 text-[10px] text-[#3B82F6]">{Math.round(modelLoadProgress.percentage || 0)}%</span>
                   )}
+                </div>
+
+                {/* Debug helper for model cache */}
+                <div className="pt-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        const list = await listCachedModels();
+                        setCachedModels(list);
+                        console.log('[Settings] Cached models:', list);
+                      } catch (e: any) {
+                        console.error('[Settings] listCachedModels failed', e);
+                        setCachedModels({ files: [`Error: ${e?.message || e}`] });
+                      }
+                    }}
+                    className="h-7 text-xs"
+                  >
+                    Debug: List cached models
+                  </Button>
+                  {cachedModels && (
+                    <div className="mt-2 p-2 bg-[#0A0F1C] border border-[#1E293B] rounded text-[10px] font-mono max-h-40 overflow-auto">
+                      <div>Dir: {cachedModels.modelsDir || 'n/a'}</div>
+                      <div>Files ({cachedModels.files?.length || 0}):</div>
+                      <pre className="whitespace-pre-wrap break-all">{JSON.stringify(cachedModels.files, null, 2)}</pre>
+                    </div>
+                  )}
+                  <p className="text-[10px] text-muted-foreground mt-1">Use exact string from the list as Default Model ID (copy-paste recommended names like Llama-3.2-1B-Instruct-Q4_0 or Qwen3-4B-Q4_K_M)</p>
                 </div>
               </div>
 

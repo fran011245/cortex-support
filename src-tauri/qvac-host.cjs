@@ -231,6 +231,26 @@ async function handleCommand(clientId, cmd, params = {}) {
         break;
       }
 
+      case "listModels": {
+        const os = require('os');
+        const path = require('path');
+        const fs = require('fs');
+        const modelsDir = path.join(os.homedir(), '.qvac', 'models');
+        let files = [];
+        try {
+          if (fs.existsSync(modelsDir)) {
+            files = fs.readdirSync(modelsDir)
+              .filter(f => f.endsWith('.gguf') || f.includes('embedding') || f.includes('Llama') || f.includes('Qwen'))
+              .sort();
+          }
+        } catch (e) {
+          console.error('[qvac-host] listModels error reading dir:', e.message);
+        }
+        console.error('[qvac-host] listModels found', files.length, 'files in', modelsDir);
+        send({ id: clientId, type: "ack", result: { modelsDir, files } });
+        break;
+      }
+
       default:
         throw new Error(`Unknown cmd: ${cmd}`);
     }
