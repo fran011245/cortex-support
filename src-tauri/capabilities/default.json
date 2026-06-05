@@ -29,6 +29,16 @@
         }
       ]
     },
+    {
+      "identifier": "shell:allow-stdin-write",
+      "allow": [
+        {
+          "name": "node",
+          "cmd": "node",
+          "args": true
+        }
+      ]
+    },
     "core:webview:allow-internal-toggle-devtools",
     "updater:default"
   ]
