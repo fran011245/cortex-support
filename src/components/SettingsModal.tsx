@@ -23,12 +23,16 @@ import { toast } from "sonner";
 import { FolderOpen, RefreshCw } from "lucide-react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 
 export function SettingsModal() {
   const { isSettingsOpen, setSettingsOpen, settings, updateSettings, setModelId } = useAgentStore();
   const [local, setLocal] = useState(settings);
   const [isReindexing, setIsReindexing] = useState(false);
   const [modelLoadProgress, setModelLoadProgress] = useState<{ percentage?: number } | null>(null);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState<any>(null);
 
   useEffect(() => {
     if (settings) setLocal(settings);
@@ -108,7 +112,7 @@ export function SettingsModal() {
     const data = JSON.stringify(local, null, 2);
     const filePath = await save({
       filters: [{ name: "JSON", extensions: ["json"] }],
-      defaultPath: "thoth-cs-settings.json",
+      defaultPath: "cortex-settings.json",
     });
     if (filePath) {
       await writeTextFile(filePath, data);
@@ -138,6 +142,37 @@ export function SettingsModal() {
       toast.success("Settings imported and applied");
     } catch (err: any) {
       toast.error("Import failed", { description: err?.message || "Invalid JSON" });
+    }
+  };
+
+  const checkForAppUpdate = async () => {
+    setCheckingUpdate(true);
+    setUpdateInfo(null);
+    try {
+      const update = await check();
+      if (update?.available) {
+        setUpdateInfo(update);
+        toast.info(`Update available: ${update.version}`, { description: (update as any).body || (update as any).notes || "New version ready to install" });
+      } else {
+        toast.success("You're on the latest version");
+      }
+    } catch (e: any) {
+      console.error("[Cortex updater]", e);
+      toast.error("Update check failed", { description: "Updater not fully configured yet (needs real pubkey + latest.json on GH releases). Use manual download from landing for now." });
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
+
+  const installUpdate = async () => {
+    if (!updateInfo) return;
+    try {
+      toast.info("Downloading & installing update...");
+      await updateInfo.downloadAndInstall();
+      toast.success("Update installed — restarting app");
+      await relaunch();
+    } catch (e: any) {
+      toast.error("Install failed", { description: e?.message || "See console for details" });
     }
   };
 
@@ -395,6 +430,26 @@ export function SettingsModal() {
                 </div>
               </div>
             </div>
+
+            {/* Optional auto-updater (manual trigger for now; full background + signed GH releases later) */}
+            <div className="pt-4 border-t border-[#1E293B] space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label>App updates (optional)</Label>
+                    <p className="text-xs text-muted-foreground">Check for new Cortex builds from GitHub Releases. Full auto-update requires a real pubkey + published latest.json (see README).</p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={checkForAppUpdate} disabled={checkingUpdate} className="h-7 text-xs border-[#1E293B]">
+                    {checkingUpdate ? "Checking..." : "Check for updates"}
+                  </Button>
+                </div>
+                {updateInfo && (
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" onClick={installUpdate} className="h-7 text-xs btn-primary">Install v{updateInfo.version} &amp; Restart</Button>
+                    <span className="text-[10px] text-muted-foreground">Replaces current app binary.</span>
+                  </div>
+                )}
+                <p className="text-[10px] text-muted-foreground/60">Private repo note: assets may require auth or be published as public release assets. You can always sync the latest .dmg URL manually to cortesupport.lovable.app.</p>
+              </div>
           </TabsContent>
 
           {/* Knowledge Base */}

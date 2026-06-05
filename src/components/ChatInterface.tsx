@@ -127,7 +127,7 @@ export function ChatInterface() {
     if (ragEnabled && ragFolder && userText) {
       try {
         const { searchKnowledge } = await import("@/lib/rag");
-        const hits = await searchKnowledge(userText, "thoth-cs-kb", 5);
+        const hits = await searchKnowledge(userText, "cortex-kb", 5);
         if (hits.length > 0) {
           sources = hits;
           const contextBlock = hits
@@ -392,7 +392,7 @@ export function ChatInterface() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask Thoth to draft a reply, improve text, or look up policy…"
+              placeholder="Ask Cortex to draft a reply, improve text, or look up policy…"
               className="min-h-[92px] resize-y bg-[#121827] border-[#1E293B] pr-14 text-[15px] placeholder:text-muted-foreground/60 focus:border-[#3B82F6]/60"
               disabled={isStreaming}
             />

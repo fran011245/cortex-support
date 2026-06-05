@@ -1,5 +1,5 @@
 /**
- * Thoth Local RAG Layer
+ * Cortex Local RAG Layer
  * Built on @qvac/sdk rag primitives + Tauri FS for reading user documents.
  * Phase 0: interfaces + basic helpers. Full ingestion pipeline in Phase 5.
  */
@@ -127,7 +127,7 @@ export function chunkText(text: string, maxChars = 1200, overlap = 200): string[
  */
 export async function ingestFolder(
   folderPath: string,
-  _workspaceId = "thoth-cs-kb",
+  _workspaceId = "cortex-kb",
   onProgress?: (processed: number, total: number) => void,
 ): Promise<{ docCount: number; chunkCount: number }> {
   const filePaths = await listKnowledgeFiles(folderPath);
@@ -156,7 +156,7 @@ export async function ingestFolder(
  */
 export async function searchKnowledge(
   query: string,
-  workspaceId = "thoth-cs-kb",
+  workspaceId = "cortex-kb",
   topK = 5,
   embedModelId = DEFAULT_EMBED_MODEL,
 ): Promise<RagSearchHit[]> {

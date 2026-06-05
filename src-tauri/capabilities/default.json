@@ -10,6 +10,7 @@
     "fs:default",
     "dialog:default",
     "shell:default",
-    "core:webview:allow-internal-toggle-devtools"
+    "core:webview:allow-internal-toggle-devtools",
+    "updater:default"
   ]
 }

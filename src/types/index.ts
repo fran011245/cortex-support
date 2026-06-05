@@ -1,5 +1,5 @@
 /**
- * Shared TypeScript types for Thoth
+ * Shared TypeScript types for Cortex
  */
 
 export type { CSSettings } from "@/lib/settings";

@@ -1,5 +1,5 @@
 /**
- * Thoth CS Settings
+ * Cortex CS Settings
  * Persisted locally via Tauri Store plugin.
  * Full control over agent behavior, tone, models, RAG paths, etc.
  */
@@ -67,7 +67,7 @@ export const DEFAULT_SETTINGS: CSSettings = {
 };
 
 let store: Store | null = null;
-const STORE_FILENAME = "thoth-settings.json";
+const STORE_FILENAME = "cortex-settings.json";
 
 async function getStore(): Promise<Store> {
   if (!store) {

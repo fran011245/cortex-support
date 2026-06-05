@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Thoth — Premium Bitfinex/Tether inspired dark theme (2026 SaaS) */
+/* Cortex — Premium Bitfinex/Tether inspired dark theme (2026 SaaS) */
 @theme inline {
   --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;

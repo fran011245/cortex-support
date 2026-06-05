@@ -1,14 +1,14 @@
-# Thoth — Bitfinex Support Co-Pilot
+# Cortex — Bitfinex Support Co-Pilot
 
 > Your personal Bitfinex Support Co-Pilot — 100% local, private, and always on-tone.
 
-**Thoth** is a beautiful, high-end desktop application (built with Tauri 2 + React 19) that helps Bitfinex Customer Support agents reply faster, more consistently, and *perfectly* matching the professional, pragmatic, clear, and expert tone that defines Bitfinex support.
+**Cortex** is a beautiful, high-end desktop application (built with Tauri 2 + React 19) that helps Bitfinex Customer Support agents reply faster, more consistently, and *perfectly* matching the professional, pragmatic, clear, and expert tone that defines Bitfinex support.
 
 Everything runs **100% locally** using the **@qvac/sdk** (Tether's local AI engine). Zero cloud dependencies. Maximum privacy. Your tickets and internal knowledge never leave the machine.
 
 ---
 
-## ✨ What Thoth Does for Bitfinex Support
+## ✨ What Cortex Does for Bitfinex Support
 
 Bitfinex support agents handle sophisticated crypto traders and corporate accounts. Responses must be:
 
@@ -18,7 +18,7 @@ Bitfinex support agents handle sophisticated crypto traders and corporate accoun
 - Precise with terminology (TXID, memo/tag, nonce, rate limits, etc.)
 - Consistent with the brand's expert, no-nonsense voice
 
-Thoth acts as an always-available co-pilot that:
+Cortex acts as an always-available co-pilot that:
 - Drafts high-quality replies in the exact Bitfinex tone
 - Lets agents fully customize the agent's personality and rules (no code changes needed)
 - Provides quick tools for grammar/style fixes, smart translation (EN ↔ ES + others), and ready-made templates for common tickets
@@ -37,7 +37,7 @@ Thoth acts as an always-available co-pilot that:
 
 ### Run in Development
 ```bash
-cd thoth-cs
+cd cortex-support
 pnpm install
 pnpm tauri dev
 ```
@@ -50,8 +50,8 @@ pnpm tauri build
 ```
 
 Produces:
-- `src-tauri/target/release/bundle/macos/Thoth.app`
-- `src-tauri/target/release/bundle/dmg/Thoth_0.1.0_aarch64.dmg`
+- `src-tauri/target/release/bundle/macos/Cortex.app`
+- `src-tauri/target/release/bundle/dmg/Cortex_0.1.0_aarch64.dmg`
 
 The `.dmg` is ready for distribution (codesign/notarize for wider release if desired).
 
@@ -72,7 +72,7 @@ The `.dmg` is ready for distribution (codesign/notarize for wider release if des
 
 ## 🖼️ Screenshots
 
-*(Capture these from the running app for your demo/hackathon submission. Use the built `Thoth.app` for the final polished look.)*
+*(Capture these from the running app for your demo/hackathon submission. Use the built `Cortex.app` for the final polished look.)*
 
 **Main Chat View**
 - Deep navy background (#0A0F1C)
@@ -98,8 +98,8 @@ The `.dmg` is ready for distribution (codesign/notarize for wider release if des
 - Agent automatically pulls relevant chunks and cites sources
 
 **Production Build Artifacts**
-- `Thoth_0.1.0_aarch64.dmg` (5.2 MB)
-- `Thoth.app`
+- `Cortex_0.1.0_aarch64.dmg` (5.2 MB)
+- `Cortex.app`
 
 *(Add high-quality screenshots here — dark theme with electric blue accents looks premium. The production .app gives the cleanest UI.)*
 
@@ -110,7 +110,7 @@ The `.dmg` is ready for distribution (codesign/notarize for wider release if des
 All customization lives in **Settings** (⌘/, or gear icon). Changes apply instantly to new generations.
 
 ### 1. Agent System Prompt
-Large textarea. The full "personality" of Thoth. Pre-filled with a strong default that captures:
+Large textarea. The full "personality" of Cortex. Pre-filled with a strong default that captures:
 - Professional, direct, pragmatic voice
 - Security & compliance awareness
 - Precise crypto terminology
@@ -170,7 +170,7 @@ It is optimized for hackathon / internal leadership demos and emphasizes real va
 
 ---
 
-## 🏆 How Thoth Helps the Bitfinex Support Team
+## 🏆 How Cortex Helps the Bitfinex Support Team
 
 - **Speed**: Agents get excellent first drafts in seconds instead of minutes.
 - **Consistency**: Every reply matches the exact tone and quality bar, even on night shifts or for new hires.
@@ -180,7 +180,7 @@ It is optimized for hackathon / internal leadership demos and emphasizes real va
 - **Knowledge Leverage**: RAG turns scattered PDFs and Markdown into instantly usable institutional knowledge.
 - **Reduced Cognitive Load**: Tools for grammar, translation, and templating remove repetitive work so agents can focus on the hard cases.
 
-Thoth doesn't replace agents — it makes great agents dramatically more effective.
+Cortex doesn't replace agents — it makes great agents dramatically more effective.
 
 ---
 
@@ -197,18 +197,30 @@ All heavy lifting (model loading, RAG, inference) happens locally. The webview o
 
 ---
 
-## 📦 Distribution
+## 📦 Distribution & Auto-Updates (optional)
 
 - Development: `pnpm tauri dev`
-- Production: `pnpm tauri build` → ready-to-distribute .dmg
-- Future: Add auto-updater, notarization, Windows/Linux targets via Tauri.
+- Production: `pnpm tauri build` → ready-to-distribute .dmg (now named `Cortex_0.1.0_....dmg` and `Cortex.app`)
+- The app includes **optional auto-updater** integration via `@tauri-apps/plugin-updater`.
+  - In Settings (General tab) there is a "Check for updates" button + install flow.
+  - To activate real updates:
+    1. `pnpm tauri signer generate -a cortex-updater` (creates private key + .pub)
+    2. Copy the content of the `.pub` file into `src-tauri/tauri.conf.json` under `plugins.updater.pubkey`
+    3. On release: use `pnpm tauri build` (it will produce the updater artifacts including latest.json + signatures if configured)
+    4. Upload the release assets (including signatures) to GitHub Releases (tag matching version).
+  - For **private repo**: GH release assets are private by default. Either:
+    - Make specific release "public" assets, or
+    - Host a public `latest.json` + .dmg somewhere (VPS, GH Pages, or even the landing site assets) and point the endpoint there.
+  - The updater is fully optional — agents can always download the latest .dmg manually.
+
+See also "Landing page + downloadable sync" below.
 
 ---
 
 ## 🛠️ Development
 
 ```bash
-cd thoth-cs
+cd cortex-support
 pnpm install
 pnpm tauri dev
 ```
@@ -218,7 +230,7 @@ pnpm tauri dev
 - Open WebView DevTools in the running window (F12, Cmd+Opt+I, or right-click → Inspect). This is now enabled by default in dev (`"devtools": true` in tauri.conf).
   - Renderer `console.log`/`warn`/`error` (from App, Chat, qvac.ts, bridge, tools, etc.) appear here.
   - qvac-host process logs surface as `[qvac-host stderr]` (and prefixed `[qvac-host]` inside the host) in the **same WebView DevTools console** — search for them. Also echoed to the tauri dev terminal.
-- Other useful logs: `[QVAC]`, `[Thoth]`, `[RAG]`, `[qvac-bridge]` etc. for easy filtering.
+- Other useful logs: `[QVAC]`, `[Cortex]`, `[RAG]`, `[qvac-bridge]` etc. for easy filtering.
 - Vite HMR for frontend changes (instant). Rust changes recompile visibly in the terminal.
 - To simulate "first run" (force re-download of defaults): delete the QVAC cache dir (e.g. `~/Library/Application Support/qvac` or platform equivalent).
 - Advanced host debugging: edit the bridge spawn temporarily to use `node --inspect=9229 ...` and attach via `chrome://inspect`, or run `node src-tauri/qvac-host.cjs` standalone and pipe NDJSON test commands on stdin.
@@ -236,6 +248,42 @@ Internal tooling for Bitfinex Support (to be defined by the team).
 
 ---
 
+## 🌐 Landing Page + Downloadable Sync (cortesupport.lovable.app)
+
+The current landing (built on Lovable) needs a prominent "Download for macOS" (or "Get Cortex") button / link that always points to the latest .dmg.
+
+**Current state (as of this rename)**: We have not edited the external Lovable site yet — this is the next coordination step with you.
+
+**Recommended flow**:
+1. Build: `pnpm tauri build` (produces `src-tauri/target/release/bundle/dmg/Cortex_0.1.0_aarch64.dmg` and signatures if updater enabled).
+2. Release on GH:
+   - Tag + push: `git tag v0.1.0 && git push origin v0.1.0`
+   - Go to GitHub → Releases → "Draft a new release" from the tag.
+   - Upload the .dmg (and .sig / latest.json / .tar.gz if generated) as assets.
+   - Publish (can be private release visible to your team).
+3. Sync to landing:
+   - **Easiest (manual)**: In the Lovable editor, edit the download button's link to the direct GH asset URL (or the release page). Update any "vX.Y.Z" text. Takes <1min.
+   - **Better (auto-sync friendly)**: Host a tiny public `manifest.json` (on your VPS under easy static route, or a public gist, or GH Pages branch even for private repo, or even a free JSON bin). Landing (if it allows an HTML/JS embed or "dynamic link" component) can `fetch` the manifest and set `download.href = data.dmgUrl; versionText = data.version`.
+     Example manifest (update on every release):
+     ```json
+     {
+       "version": "0.1.0",
+       "dmgUrl": "https://github.com/fran011245/cortex-support/releases/download/v0.1.0/Cortex_0.1.0_aarch64.dmg",
+       "notes": "Renamed to Cortex + optional auto-updater support. Lightweight Llama/Qwen models.",
+       "sizeMB": 5
+     }
+     ```
+4. VPS option (you have one): Add a simple static file server or just drop the .dmg + manifest in a volume mounted to a public path via Traefik. Then landing always points to `https://<your-vps>/download/cortex-latest.dmg` (you symlink or copy on deploy).
+
+**What I suggest we do next together**:
+- You show me the current structure of the Lovable page (or the specific section with the download CTA, any custom code/embed area).
+- Decide: manual updates for v0.1 / hackathon, or invest 20min in a manifest + fetch (if Lovable allows) or VPS mirror.
+- After next build + GH release, we update the landing link + version badge.
+
+This keeps the "single source of truth" as the GH release (or your VPS), and the landing just references it.
+
+---
+
 ## 📦 Hackathon / Deliverables
 
 - ✅ Excellent README (this file) with setup, customization guide, architecture, and value explanation
@@ -245,4 +293,4 @@ Internal tooling for Bitfinex Support (to be defined by the team).
 
 Built with ❤️ and a deep respect for professional support work.
 
-**Thoth** — because even the best agents deserve a co-pilot that never forgets the tone.
+**Cortex** — because even the best agents deserve a co-pilot that never forgets the tone.

@@ -1,5 +1,5 @@
 /**
- * Thoth Global Store (Zustand)
+ * Cortex Global Store (Zustand)
  * Manages chat sessions, agent state, loading, settings sync.
  */
 
@@ -228,7 +228,7 @@ export const useAgentStore = create<AgentState>()(
       },
     }),
     {
-      name: "thoth-agent-store",
+      name: "cortex-agent-store",
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         sessions: state.sessions,

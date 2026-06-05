@@ -1,5 +1,5 @@
 /**
- * QVAC Bridge for Thoth (Tauri + Node child process)
+ * QVAC Bridge for Cortex (Tauri + Node child process)
  *
  * Spawns a persistent Node.js child (`qvac-host.cjs`) that runs the real @qvac/sdk.
  * Communication: newline-delimited JSON over stdin/stdout (via @tauri-apps/plugin-shell).

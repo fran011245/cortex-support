@@ -1,5 +1,5 @@
 /**
- * QVAC SDK Wrapper for Thoth
+ * QVAC SDK Wrapper for Cortex
  * Robust public API for local LLM + embeddings + RAG using @qvac/sdk.
  *
  * All heavy lifting happens in a Node child process (src-tauri/qvac-host.cjs)
@@ -163,7 +163,7 @@ export async function rebuildKnowledgeBase(folderPath: string, embedModelId = "E
   return bridgeRagRebuild({ folderPath, embedModelId });
 }
 
-export async function searchKnowledgeBase(query: string, workspace = "thoth-cs-kb", embedModelId = "EMBEDDINGGEMMA_300M_Q4_0", topK = 5) {
+export async function searchKnowledgeBase(query: string, workspace = "cortex-kb", embedModelId = "EMBEDDINGGEMMA_300M_Q4_0", topK = 5) {
   const { bridgeRagSearch } = await import("./qvac-bridge");
   return bridgeRagSearch({ query, workspace, embedModelId, topK });
 }

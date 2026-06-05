@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Thoth QVAC Host (Node.js sidecar / child process)
+ * Cortex QVAC Host (Node.js sidecar / child process)
  *
  * This runs the actual @qvac/sdk in a real Node/Bare-capable environment.
  * Communicates with the Tauri webview over stdio using newline-delimited JSON.
@@ -203,7 +203,7 @@ async function handleCommand(clientId, cmd, params = {}) {
       }
 
       case "ragRebuild": {
-        const { folderPath, workspace = "thoth-cs-kb", embedModelId = "EMBEDDINGGEMMA_300M_Q4_0" } = params;
+        const { folderPath, workspace = "cortex-kb", embedModelId = "EMBEDDINGGEMMA_300M_Q4_0" } = params;
         if (!folderPath) throw new Error("folderPath is required");
         const docs = collectTextFiles(folderPath);
         if (!docs.length) {
@@ -223,7 +223,7 @@ async function handleCommand(clientId, cmd, params = {}) {
       }
 
       case "ragSearch": {
-        const { query, workspace = "thoth-cs-kb", embedModelId = "EMBEDDINGGEMMA_300M_Q4_0", topK = 5 } = params;
+        const { query, workspace = "cortex-kb", embedModelId = "EMBEDDINGGEMMA_300M_Q4_0", topK = 5 } = params;
         if (!query) throw new Error("query is required");
         const embedModel = await loadModel({ modelSrc: embedModelId, modelType: "embeddings" });
         const results = await ragSearch({ modelId: embedModel, query, workspace, topK });

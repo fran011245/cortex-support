@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    thoth_cs_lib::run()
+    cortex_support_lib::run()
 }

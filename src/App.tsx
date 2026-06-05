@@ -20,7 +20,7 @@ function App() {
         // success is silent in UI for now
       })
       .catch((e) => {
-        console.warn("[Thoth] QVAC provider not ready yet (expected in early dev):", e);
+        console.warn("[Cortex] QVAC provider not ready yet (expected in early dev):", e);
         // Don't block the UI — Phase 1 will surface a nice status
       });
 

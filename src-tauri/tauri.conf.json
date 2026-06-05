@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Thoth",
+  "productName": "Cortex",
   "version": "0.1.0",
-  "identifier": "com.thoth.bitfinex-cs",
+  "identifier": "com.fran011245.cortex-support",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Thoth — Bitfinex Support Co-Pilot",
+        "title": "Cortex — Bitfinex Support Co-Pilot",
         "width": 1280,
         "height": 860,
         "minWidth": 960,
@@ -36,6 +36,18 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["qvac-host.cjs"]
+    "resources": ["qvac-host.cjs"],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZBS0VfUFVCS0VZClJXUlRZM1Z5Y0Z3dFpYSmZjMkZ1WjJWMFgyeHBkMjV6YjI0dWMybHpkR1Z1WjJWMFgyeHBkMjV6YjI0PQp",
+      "endpoints": [
+        "https://github.com/fran011245/cortex-support/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

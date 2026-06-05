@@ -22,10 +22,10 @@ export function Sidebar() {
       <div className="flex items-center justify-between border-b border-[#1E293B] px-4 py-3">
         <div className="flex items-center gap-2">
           <div className="h-7 w-7 rounded bg-[#3B82F6] flex items-center justify-center">
-            <span className="text-[13px] font-semibold text-white tracking-[-1px]">T</span>
+            <span className="text-[13px] font-semibold text-white tracking-[-1px]">C</span>
           </div>
           <div>
-            <div className="font-semibold tracking-[-0.3px] text-lg leading-none">Thoth</div>
+            <div className="font-semibold tracking-[-0.3px] text-lg leading-none">Cortex</div>
             <div className="text-[10px] text-muted-foreground -mt-0.5">Bitfinex Support</div>
           </div>
         </div>

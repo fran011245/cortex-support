@@ -1,8 +1,8 @@
-# Thoth Demo Video Script (Hackathon / Internal Demo)
+# Cortex Demo Video Script (Hackathon / Internal Demo)
 
 **Target length**: 2:30 – 3:00 minutes  
 **Tone**: Professional, calm, confident (matching the product)  
-**Recording tips**: Use the final `Thoth.app` (not dev build). Record at 1440p or higher. Show the mouse, narrate benefits for real support agents. Use the built-in macOS screen recorder or CleanShot/Loom.
+**Recording tips**: Use the final `Cortex.app` (not dev build). Record at 1440p or higher. Show the mouse, narrate benefits for real support agents. Use the built-in macOS screen recorder or CleanShot/Loom.
 
 ## Script
 
@@ -10,7 +10,7 @@
 
 "Bitfinex support agents handle sophisticated traders and corporate accounts every day. Every reply has to be direct, security-aware, and perfectly on-tone — no fluff, no emojis, precise terminology.
 
-Thoth is their always-on, 100% local co-pilot that helps them draft excellent responses in seconds while giving the team complete control over the agent's voice and knowledge."
+Cortex is their always-on, 100% local co-pilot that helps them draft excellent responses in seconds while giving the team complete control over the agent's voice and knowledge."
 
 **[0:15 – 1:00] Core Chat Experience**
 
@@ -56,13 +56,13 @@ Everything updates instantly for the next generation."
 
 **[2:30 – 2:45] Closing + Benefits**
 
-"Thoth doesn't replace agents — it makes every agent faster, more consistent, and perfectly on-brand.
+"Cortex doesn't replace agents — it makes every agent faster, more consistent, and perfectly on-brand.
 
 100% local with Tether's own @qvac/sdk. Your data and knowledge never leave the machine.
 
 Faster replies. Higher quality. Full team control.
 
-That's Thoth — the local co-pilot for Bitfinex Support."
+That's Cortex — the local co-pilot for Bitfinex Support."
 
 ## Suggested B-roll / Screen Recording Order
 
@@ -82,8 +82,8 @@ That's Thoth — the local co-pilot for Bitfinex Support."
 - Calm, modern tech/finance track (no lyrics)
 - Clean cuts, subtle zooms on important UI elements
 - Show both the output text and the Settings side-by-side when demonstrating control
-- End on the Thoth logo / app icon with tagline
+- End on the Cortex logo / app icon with tagline
 
 Record a couple takes of the streaming reply — it's impressive live.
 
-This script positions Thoth as a serious, production-grade tool for professional support teams.
+This script positions Cortex as a serious, production-grade tool for professional support teams.
