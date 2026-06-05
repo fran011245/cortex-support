@@ -9,7 +9,26 @@
     "store:default",
     "fs:default",
     "dialog:default",
-    "shell:default",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "node",
+          "cmd": "node",
+          "args": true
+        }
+      ]
+    },
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "node",
+          "cmd": "node",
+          "args": true
+        }
+      ]
+    },
     "core:webview:allow-internal-toggle-devtools",
     "updater:default"
   ]

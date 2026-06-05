@@ -67,7 +67,8 @@ export async function initQVAC(): Promise<void> {
     console.log("[QVAC] Provider started via host bridge");
   } catch (err) {
     console.error("[QVAC] Failed to start provider via bridge:", err);
-    throw new Error("Could not start local QVAC engine. Check that Node is available and the host script exists.");
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Could not start local QVAC engine. ${msg}. Make sure Node.js is installed and the shell:allow-spawn permission is granted in capabilities.`);
   }
 }
 
