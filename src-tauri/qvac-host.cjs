@@ -240,7 +240,6 @@ async function handleCommand(clientId, cmd, params = {}) {
         try {
           if (fs.existsSync(modelsDir)) {
             files = fs.readdirSync(modelsDir)
-              .filter(f => f.endsWith('.gguf') || f.includes('embedding') || f.includes('Llama') || f.includes('Qwen'))
               .sort();
           }
         } catch (e) {

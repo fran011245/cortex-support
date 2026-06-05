@@ -318,7 +318,7 @@ export function SettingsModal() {
                 <Input
                   value={local.defaultModelId}
                   onChange={(e) => setLocal({ ...local, defaultModelId: e.target.value })}
-                  placeholder="e.g. Llama-3.2-1B-Instruct-Q4_0 or /path/to/model.gguf"
+                  placeholder="e.g. LLAMA_3_2_1B_INST_Q4_0 or /path/to/model.gguf"
                   className="bg-[#121827] border-[#1E293B] font-mono text-sm"
                 />
                 <p className="text-[11px] text-muted-foreground">QVAC model ID, local path, or registry constant. Click a recommendation below, then Load to download (if needed) and cache it.</p>
@@ -395,7 +395,7 @@ export function SettingsModal() {
                       <pre className="whitespace-pre-wrap break-all">{JSON.stringify(cachedModels.files, null, 2)}</pre>
                     </div>
                   )}
-                  <p className="text-[10px] text-muted-foreground mt-1">Use exact string from the list as Default Model ID (copy-paste recommended names like Llama-3.2-1B-Instruct-Q4_0 or Qwen3-4B-Q4_K_M)</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">The chips use the correct SDK registry IDs (LLAMA_3_2_1B_INST_Q4_0 etc). Use the Debug button to see local files. For first-time download, the registry ID from the chips is what you need.</p>
                 </div>
               </div>
 

@@ -146,23 +146,23 @@ Export your entire tuned agent (prompt + rules + model prefs + RAG path) as JSON
 **Pro tip**: The Settings *are* the product. A great support team can evolve the agent's voice and knowledge base over time without ever touching the codebase.
 
 ### Recommended Default Models (Lightweight + Task-Aligned)
-We ship with `Llama-3.2-1B-Instruct-Q4_0` pre-configured as the default (in `DEFAULT_SETTINGS`). It is **not** included in the .dmg/.app bundle (weights download at runtime via QVAC SDK to your local cache dir on first use — this keeps the bundle tiny).
+We ship with `LLAMA_3_2_1B_INST_Q4_0` pre-configured as the default (in `DEFAULT_SETTINGS`). It is **not** included in the .dmg/.app bundle (weights download at runtime via QVAC SDK to your local cache dir on first use — this keeps the bundle tiny).
 
-In **Settings → General** you will see quick-select buttons for three recommended lightweight instruction-tuned models from the QVAC registry. They are ideal for the support task (adhering to our detailed professional support tone system prompt, producing professional/direct/pragmatic replies, incorporating RAG context when relevant).
+In **Settings → General** you will see quick-select buttons for three recommended lightweight instruction-tuned models from the QVAC registry (use the exact constant names exported by the SDK). They are ideal for the support task.
 
-**Use the exact strings that exist in your local QVAC cache** (the app will print the available list on MODEL_NOT_FOUND). Current good ones usually include:
+**Use the exact registry IDs** (the app will print the available list on MODEL_NOT_FOUND if you use wrong one). Good ones:
 
-- `Llama-3.2-1B-Instruct-Q4_0` (primary — ultra light, fastest download & inference)
-- `Qwen3-1.7B-Q4_0` (excellent at following complex instructions)
-- `Qwen3-4B-Q4_K_M` (higher quality while remaining lightweight)
+- `LLAMA_3_2_1B_INST_Q4_0` (primary — ultra light, fastest)
+- `QWEN3_1_7B_INST_Q4` (excellent at following complex instructions)
+- `QWEN3_4B_INST_Q4_K_M` (higher quality while remaining lightweight)
 
-For RAG embeddings: `embeddinggemma-300m-Q4_0`
+For RAG embeddings: `EMBEDDINGGEMMA_300M_Q4_0`
 
 Select one, then use the **"Load / Download this model"** button (with live progress %) to trigger the fetch and cache it. The choice persists. Subsequent launches and generations are instant.
 
 The header "Load recommended model" button and first-send auto-load also use the configured default (with progress feedback on download).
 
-Tip: if a model ID from the list doesn't work, copy-paste the exact filename from the "Available models" error message printed in the console / toast. The SDK registry uses the .gguf basenames.
+Tip: use the exact registry constants like LLAMA_3_2_1B_INST_Q4_0 (not the local .gguf filenames). The chips use the correct ones. The "Available models" list in errors shows local files, but for first download use the SDK constant IDs.
 
 ---
 
