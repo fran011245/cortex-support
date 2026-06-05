@@ -51,7 +51,7 @@ export function ChatInterface() {
 
   const handleUseAsResponse = (text: string) => {
     copyToClipboard(text);
-    toast.info("Ready to paste into Bitfinex ticket", { description: "Use ⌘V / Ctrl+V in your support tool" });
+    toast.info("Ready to paste into support ticket", { description: "Use ⌘V / Ctrl+V in your support tool" });
   };
 
   // Load the recommended default (or current settings default). Supports onProgress for download feedback.
@@ -100,7 +100,7 @@ export function ChatInterface() {
 
     // === Core CS Agent: always use the current effective system prompt from Settings ===
     // This is the "main CS Agent" implementation for Phase 2.
-    // It enforces the professional, direct, pragmatic, security-aware Bitfinex tone.
+    // It enforces the professional, direct, pragmatic, security-aware support tone.
     const systemPrompt = await getEffectiveSystemPrompt();
 
     // Use fresh store state (avoids stale closures after async model load etc.)
@@ -293,7 +293,7 @@ export function ChatInterface() {
               </div>
               <div className="text-2xl font-semibold tracking-[-0.5px]">How can I help with this ticket?</div>
               <p className="mt-3 max-w-md mx-auto text-sm text-muted-foreground">
-                Your Bitfinex CS Agent — always on-tone, 100% local. Uses your current Settings for personality, tone, and knowledge base.
+                Your Cortex Support Agent — always on-tone, 100% local. Uses your current Settings for personality, tone, and knowledge base.
               </p>
               <div className="mt-8 flex flex-wrap justify-center gap-2 text-xs">
                 {["Check deposit status", "Draft reply for delayed withdrawal", "Translate to Spanish", "Review my draft for tone", "KYC document help"].map((ex) => (

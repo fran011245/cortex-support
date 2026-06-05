@@ -205,7 +205,7 @@ export function SettingsModal() {
               />
               <div className="flex justify-between mt-2">
                 <Button variant="ghost" size="sm" onClick={() => setLocal({ ...local, systemPrompt: DEFAULT_SYSTEM_PROMPT })}>
-                  Restore default Bitfinex prompt
+                  Restore default prompt
                 </Button>
                 <span className="text-xs text-muted-foreground self-center">{local.systemPrompt.length} chars</span>
               </div>
@@ -459,7 +459,7 @@ export function SettingsModal() {
               <div className="mt-1.5 flex gap-2">
                 <Input
                   readOnly
-                  value={local.ragFolderPath || "No folder selected — Bitfinex help articles, internal runbooks, etc."}
+                  value={local.ragFolderPath || "No folder selected — help articles, internal runbooks, policies, etc."}
                   className="flex-1 bg-[#121827] border-[#1E293B] text-muted-foreground font-mono text-xs"
                 />
                 <Button variant="outline" onClick={pickRagFolder} className="gap-2 shrink-0 border-[#1E293B]">

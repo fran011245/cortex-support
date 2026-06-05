@@ -1,16 +1,16 @@
-# Cortex — Bitfinex Support Co-Pilot
+# Cortex — Support Co-Pilot
 
-> Your personal Bitfinex Support Co-Pilot — 100% local, private, and always on-tone.
+> Your personal Support Co-Pilot — 100% local, private, and always on-tone.
 
-**Cortex** is a beautiful, high-end desktop application (built with Tauri 2 + React 19) that helps Bitfinex Customer Support agents reply faster, more consistently, and *perfectly* matching the professional, pragmatic, clear, and expert tone that defines Bitfinex support.
+**Cortex** is a beautiful, high-end desktop application (built with Tauri 2 + React 19) that helps customer support agents reply faster, more consistently, and *perfectly* matching a professional, pragmatic, clear, and expert tone.
 
 Everything runs **100% locally** using the **@qvac/sdk** (Tether's local AI engine). Zero cloud dependencies. Maximum privacy. Your tickets and internal knowledge never leave the machine.
 
 ---
 
-## ✨ What Cortex Does for Bitfinex Support
+## ✨ What Cortex Does for Support Teams
 
-Bitfinex support agents handle sophisticated crypto traders and corporate accounts. Responses must be:
+Customer support agents (especially in crypto and financial services) handle sophisticated users and corporate accounts. Responses must be:
 
 - Direct but polite
 - Security- and compliance-first
@@ -19,7 +19,7 @@ Bitfinex support agents handle sophisticated crypto traders and corporate accoun
 - Consistent with the brand's expert, no-nonsense voice
 
 Cortex acts as an always-available co-pilot that:
-- Drafts high-quality replies in the exact Bitfinex tone
+- Drafts high-quality replies in a consistent professional tone
 - Lets agents fully customize the agent's personality and rules (no code changes needed)
 - Provides quick tools for grammar/style fixes, smart translation (EN ↔ ES + others), and ready-made templates for common tickets
 - Uses local RAG over your own folder of help articles, runbooks, and internal guidelines — with sources cited in replies
@@ -86,7 +86,7 @@ The `.dmg` is ready for distribution (codesign/notarize for wider release if des
 
 **Settings Modal (the heart of the product)**
 - Tabs: General | Agent Prompt | Tone Rules | Knowledge Base
-- Large editable system prompt (pre-filled with excellent Bitfinex tone)
+- Large editable system prompt (pre-filled with excellent professional support tone)
 - Structured tone controls + presets (Professional / Concise / Detailed / Empathetic)
 - Temperature, max tokens, model selection, RAG toggle
 - Folder picker + "Rebuild Knowledge Base" button
@@ -148,7 +148,7 @@ Export your entire tuned agent (prompt + rules + model prefs + RAG path) as JSON
 ### Recommended Default Models (Lightweight + Task-Aligned)
 We ship with `LLAMA_3_2_1B_INST_Q4_0` pre-configured as the default (in `DEFAULT_SETTINGS`). It is **not** included in the .dmg/.app bundle (weights download at runtime via QVAC SDK to your local cache dir on first use — this keeps the bundle tiny).
 
-In **Settings → General** you will see quick-select buttons for three recommended lightweight instruction-tuned models from the QVAC registry. They are ideal for the support task (adhering to our detailed Bitfinex tone system prompt, producing professional/direct/pragmatic replies, incorporating RAG context when relevant):
+In **Settings → General** you will see quick-select buttons for three recommended lightweight instruction-tuned models from the QVAC registry. They are ideal for the support task (adhering to our detailed professional support tone system prompt, producing professional/direct/pragmatic replies, incorporating RAG context when relevant):
 
 - `LLAMA_3_2_1B_INST_Q4_0` (primary — ultra light, fastest download & inference)
 - `QWEN3_1_7B_INST_Q4` (excellent at following complex instructions)
@@ -170,7 +170,7 @@ It is optimized for hackathon / internal leadership demos and emphasizes real va
 
 ---
 
-## 🏆 How Cortex Helps the Bitfinex Support Team
+## 🏆 How Cortex Helps Support Teams
 
 - **Speed**: Agents get excellent first drafts in seconds instead of minutes.
 - **Consistency**: Every reply matches the exact tone and quality bar, even on night shifts or for new hires.
@@ -191,7 +191,7 @@ Cortex doesn't replace agents — it makes great agents dramatically more effect
 - **AI Engine**: @qvac/sdk (Tether's local inference stack) running via a Node child process (host script) for full access to embeddings, RAG, and streaming completions.
 - **Persistence**: Tauri Store plugin (settings) + localStorage (chat sessions).
 - **RAG**: Folder-based, QVAC embeddings, workspace-isolated, sources cited in every relevant reply.
-- **Theme**: Deep navy (#0A0F1C) + Bitfinex blue (#3B82F6) + glassmorphism. 2026 Linear/Vercel/crypto-finance aesthetic.
+- **Theme**: Deep navy (#0A0F1C) + accent blue (#3B82F6) + glassmorphism. 2026 Linear/Vercel/crypto-finance aesthetic.
 
 All heavy lifting (model loading, RAG, inference) happens locally. The webview only orchestrates.
 
@@ -244,7 +244,7 @@ Requires a local model for best results (QVAC registry names or GGUF files work)
 
 ## 📄 License
 
-Internal tooling for Bitfinex Support (to be defined by the team).
+Internal tooling for professional support teams (to be defined by the team).
 
 ---
 

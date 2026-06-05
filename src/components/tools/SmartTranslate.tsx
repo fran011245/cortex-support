@@ -53,13 +53,13 @@ export function SmartTranslate() {
       const fromLabel = LANGUAGES.find((l) => l.code === fromLang)?.label || fromLang;
       const toLabel = LANGUAGES.find((l) => l.code === toLang)?.label || toLang;
 
-      const task = `You are a professional translator for Bitfinex Customer Support.
+      const task = `You are a professional translator for Customer Support.
 
 Translate the following text from ${fromLabel} to ${toLabel}.
 
 Requirements:
 - Preserve the exact original meaning, numbers, names, technical terms (TXID, wallet address, etc.), and intent.
-- After translating, lightly polish the result to match Bitfinex support tone (professional, direct, pragmatic, clear, concise, no emojis, security-aware where appropriate) while staying faithful to the source.
+- After translating, lightly polish the result to match professional support tone (professional, direct, pragmatic, clear, concise, no emojis, security-aware where appropriate) while staying faithful to the source.
 - Do not add or remove information.
 - Output ONLY the final translated + polished text. No prefixes, no explanations.
 
@@ -159,7 +159,7 @@ Translated version in ${toLabel}:`;
         <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Paste customer message or draft to translate while preserving Bitfinex professional tone..."
+          placeholder="Paste customer message or draft to translate while preserving professional support tone..."
           className="min-h-[120px] bg-[#121827] border-[#1E293B]"
         />
       </div>
@@ -190,7 +190,7 @@ Translated version in ${toLabel}:`;
       )}
 
       <p className="text-xs text-muted-foreground">
-        Smart translate uses the current CS Agent prompt so the result stays on-tone for Bitfinex support.
+        Smart translate uses the current CS Agent prompt so the result stays on-tone for professional support.
       </p>
     </div>
   );

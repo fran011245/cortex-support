@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Cortex — Bitfinex Support Co-Pilot",
+        "title": "Cortex — Support Co-Pilot",
         "width": 1280,
         "height": 860,
         "minWidth": 960,

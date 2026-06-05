@@ -26,7 +26,7 @@ export function Sidebar() {
           </div>
           <div>
             <div className="font-semibold tracking-[-0.3px] text-lg leading-none">Cortex</div>
-            <div className="text-[10px] text-muted-foreground -mt-0.5">Bitfinex Support</div>
+            <div className="text-[10px] text-muted-foreground -mt-0.5">Support Co-Pilot</div>
           </div>
         </div>
         <Button

@@ -33,7 +33,7 @@ export function GrammarCheck() {
 Rules (in addition to the system prompt above):
 - Correct grammar, spelling, punctuation, and sentence structure.
 - Make it professional, direct, pragmatic, clear and concise.
-- Enforce Bitfinex tone: no emojis, no fluff, no overly friendly language, be security-aware where relevant.
+- Enforce professional support tone: no emojis, no fluff, no overly friendly language, be security-aware where relevant.
 - Improve flow and scannability (short paragraphs, bullets if it helps).
 - Preserve all factual details, numbers, names, and the original intent exactly.
 - Output ONLY the cleaned/improved version. Do not add meta comments like "Here's the improved version:" or explanations.
@@ -99,7 +99,7 @@ Improved version:`;
         <Textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Paste the draft reply, customer message, or note you want to polish for Bitfinex tone and correctness..."
+          placeholder="Paste the draft reply, customer message, or note you want to polish for professional tone and correctness..."
           className="min-h-[140px] bg-[#121827] border-[#1E293B]"
         />
       </div>
@@ -107,7 +107,7 @@ Improved version:`;
       <div className="flex gap-3">
         <Button onClick={runCheck} disabled={isProcessing || !input.trim()} className="btn-primary gap-2">
           {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-          {isProcessing ? "Improving..." : "Improve with Bitfinex Tone"}
+          {isProcessing ? "Improving..." : "Improve with Professional Tone"}
         </Button>
         {output && (
           <>

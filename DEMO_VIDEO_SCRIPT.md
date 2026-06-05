@@ -8,7 +8,7 @@
 
 **[0:00 – 0:15] Hook + Value Prop**
 
-"Bitfinex support agents handle sophisticated traders and corporate accounts every day. Every reply has to be direct, security-aware, and perfectly on-tone — no fluff, no emojis, precise terminology.
+"Support agents handle sophisticated traders and corporate accounts every day. Every reply has to be direct, security-aware, and perfectly on-tone — no fluff, no emojis, precise terminology.
 
 Cortex is their always-on, 100% local co-pilot that helps them draft excellent responses in seconds while giving the team complete control over the agent's voice and knowledge."
 
@@ -30,7 +30,7 @@ One click 'Use as Response' and it's ready to paste into the ticket system."
 
 "Support agents do a lot of repetitive work.
 
-Grammar & Style tool: paste a messy draft → instantly polished to Bitfinex standards.
+Grammar & Style tool: paste a messy draft → instantly polished to professional standards.
 
 Smart Translate: English to Spanish (or other languages) while preserving the exact professional tone.
 
@@ -40,7 +40,7 @@ Response Templates: pick 'Withdrawal Issue', add a couple details from the ticke
 
 "But the real power is here — Settings.
 
-The entire personality lives in an editable system prompt — pre-filled with the exact Bitfinex support voice we want.
+The entire personality lives in an editable system prompt — pre-filled with the exact professional support voice we want.
 
 Tone Rules let you choose Professional, Concise, or Detailed presets and fine-tune with toggles.
 
@@ -62,7 +62,7 @@ Everything updates instantly for the next generation."
 
 Faster replies. Higher quality. Full team control.
 
-That's Cortex — the local co-pilot for Bitfinex Support."
+That's Cortex — the local co-pilot for professional support."
 
 ## Suggested B-roll / Screen Recording Order
 

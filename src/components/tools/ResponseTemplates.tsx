@@ -40,7 +40,7 @@ export function ResponseTemplates() {
         ? `\n\nAdditional context from the ticket (use this to customize):\n${extraContext.trim()}`
         : "";
 
-      const task = `Using the Bitfinex support guidelines and tone in the system prompt, generate a high-quality, ready-to-send customer reply for the following common scenario.
+      const task = `Using the professional support guidelines and tone in the system prompt, generate a high-quality, ready-to-send customer reply for the following common scenario.
 
 Scenario template (base structure and recommended points):
 ${base}
@@ -50,7 +50,7 @@ Instructions:
 - Start directly with the customer-facing text (no "Here's a draft" or meta).
 - Follow all current tone rules (full sentences, direct but polite, security emphasis, no emojis, concise where possible).
 - Incorporate the additional context naturally.
-- Make it feel written by an expert Bitfinex support agent.
+- Make it feel written by an expert support agent.
 - End with a clear next step or request for information if needed.
 
 Output only the final reply text.`;
