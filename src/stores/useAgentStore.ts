@@ -71,12 +71,26 @@ const createNewSession = (): ChatSession => ({
   updatedAt: new Date().toISOString(),
 });
 
-// Tauri Store persistence — survives app reinstalls, unlike localStorage.
-// Falls back to localStorage gracefully (dev, first-run, or Tauri bridge unavailable).
+// Tauri Store persistence for sessions.
+// Survives app reinstalls / app data clear (unlike localStorage).
+// Uses the same @tauri-apps/plugin-store as settings ("cortex-sessions.json").
+//
+// Graceful degradation:
+// - Falls back to localStorage on any error (dev, first render before plugin ready, etc.)
+// - One-time migration from localStorage on first successful read.
+//
+// Note on async storage + Zustand persist:
+// Rehydration is async. In practice the UI shows default empty state for one frame
+// on cold start; the persisted sessions appear immediately after. This is acceptable
+// for a desktop app and matches how settings are loaded.
 let _sessionsStore: Store | null = null;
+
 async function getSessionsStore(): Promise<Store> {
   if (!_sessionsStore) {
-    _sessionsStore = await Store.load("cortex-sessions.json", { defaults: {}, autoSave: true });
+    _sessionsStore = await Store.load("cortex-sessions.json", {
+      defaults: {},
+      autoSave: true,
+    });
   }
   return _sessionsStore;
 }
@@ -86,8 +100,11 @@ const tauriStorage = {
     try {
       const store = await getSessionsStore();
       const value = await store.get<string>(name);
-      if (value != null) return value;
-      // One-time migration from localStorage for existing installs
+      if (value != null) {
+        return value;
+      }
+
+      // One-time migration from localStorage (only if we have legacy data)
       const legacy = localStorage.getItem(name);
       if (legacy) {
         await store.set(name, legacy);
@@ -96,25 +113,31 @@ const tauriStorage = {
         return legacy;
       }
       return null;
-    } catch {
+    } catch (err) {
+      // Never block the app on storage issues
+      console.warn("[Cortex] tauriStorage.getItem fallback to localStorage", err);
       return localStorage.getItem(name);
     }
   },
+
   setItem: async (name: string, value: string): Promise<void> => {
     try {
       const store = await getSessionsStore();
       await store.set(name, value);
       await store.save();
-    } catch {
+    } catch (err) {
+      console.warn("[Cortex] tauriStorage.setItem fallback to localStorage", err);
       localStorage.setItem(name, value);
     }
   },
+
   removeItem: async (name: string): Promise<void> => {
     try {
       const store = await getSessionsStore();
       await store.delete(name);
       await store.save();
-    } catch {
+    } catch (err) {
+      console.warn("[Cortex] tauriStorage.removeItem fallback", err);
       localStorage.removeItem(name);
     }
   },

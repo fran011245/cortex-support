@@ -11,18 +11,7 @@ import remarkGfm from "remark-gfm";
 import { loadLocalModel, streamCompletion, initQVAC } from "@/lib/qvac";
 import { getEffectiveSystemPrompt, DEFAULT_LLM_MODEL, RECOMMENDED_LLM_MODELS } from "@/lib/settings";
 import { ModelStatus } from "@/components/ModelStatus";
-
-// Detect common support ticket categories from pasted customer text.
-function detectTicketType(text: string): string | null {
-  const t = text.toLowerCase();
-  if (/\b(txid|withdrawal|withdraw|pending transfer|stuck|not arrived)\b/.test(t)) return "withdrawal inquiry";
-  if (/\b(deposit|credited|not received|missing funds|not showing)\b/.test(t)) return "deposit inquiry";
-  if (/\b(kyc|verification|document|identity|id proof|account limit)\b/.test(t)) return "KYC / verification";
-  if (/\b(api|endpoint|rate.?limit|signature|nonce|api key|integration)\b/.test(t)) return "API / integration issue";
-  if (/\b(comprom|2fa|hacked|suspicious|unauthorized|account.?access|security)\b/.test(t)) return "security concern";
-  if (text.trim().length > 40) return "support ticket";
-  return null;
-}
+import { detectTicketType } from "@/lib/ticketDetection";
 
 // Custom markdown components styled for the Cortex dark theme.
 const mdComponents: React.ComponentProps<typeof ReactMarkdown>["components"] = {
@@ -54,6 +43,26 @@ const mdComponents: React.ComponentProps<typeof ReactMarkdown>["components"] = {
   h2: ({ children }) => <h2 className="font-semibold text-sm mb-1 mt-3 first:mt-0">{children}</h2>,
   h3: ({ children }) => <h3 className="font-medium text-sm mb-1 mt-2 first:mt-0">{children}</h3>,
   hr: () => <hr className="border-[#1E293B] my-3" />,
+
+  // GFM tables + basic structure
+  table: ({ children }) => (
+    <div className="my-2 overflow-x-auto rounded border border-[#1E293B]">
+      <table className="min-w-full text-sm">{children}</table>
+    </div>
+  ),
+  thead: ({ children }) => <thead className="bg-[#0A0F1C]">{children}</thead>,
+  tbody: ({ children }) => <tbody className="divide-y divide-[#1E293B] bg-[#121827]/30">{children}</tbody>,
+  tr: ({ children }) => <tr className="border-b border-[#1E293B] last:border-0">{children}</tr>,
+  th: ({ children }) => (
+    <th className="border-r border-[#1E293B] px-2 py-1 text-left font-semibold text-foreground/90 last:border-r-0">
+      {children}
+    </th>
+  ),
+  td: ({ children }) => (
+    <td className="border-r border-[#1E293B] px-2 py-1 align-top text-foreground/90 last:border-r-0">
+      {children}
+    </td>
+  ),
 };
 
 export function ChatInterface() {
@@ -276,7 +285,7 @@ export function ChatInterface() {
     setTicketInput("");
     setIsTicketPaneOpen(false);
     const label = detectedType ? ` (${detectedType})` : "";
-    const prompt = `Here's a customer message${label} — please draft a professional, ready-to-send reply:\n\n---\n${ticket}\n---`;
+    const prompt = `The following is a real customer support message${label}. Draft a clear, professional, direct reply that the agent can copy-paste. Use the customer's details exactly. Be concise but complete.\n\n---\n${ticket}\n---`;
     await sendMessageWithText(prompt);
   };
 
