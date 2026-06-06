@@ -47,6 +47,9 @@ export interface CSSettings {
   // Extra instructions appended to system prompt (powerful customization)
   extraInstructions?: string;
 
+  // UI preference (backlog item from usage stats polish)
+  showUsageStats?: boolean;
+
   // 5. Knowledge Base
   knowledgeBaseLastIndexed?: string; // ISO date
   knowledgeBaseDocCount?: number;
@@ -87,6 +90,7 @@ export const DEFAULT_SETTINGS: CSSettings = {
   extraInstructions: "",
   knowledgeBaseLastIndexed: undefined,
   knowledgeBaseDocCount: 0,
+  showUsageStats: true,
 };
 
 let store: Store | null = null;

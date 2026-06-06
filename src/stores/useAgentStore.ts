@@ -178,12 +178,13 @@ export const useAgentStore = create<AgentState>()(
         set((state) => ({
           currentSession: sess,
           sessions: [sess, ...state.sessions],
+          activeTool: "chat",
         }));
       },
 
       loadSession: (id) => {
         const sess = get().sessions.find((s) => s.id === id);
-        if (sess) set({ currentSession: sess });
+        if (sess) set({ currentSession: sess, activeTool: "chat" });
       },
 
       deleteSession: (id) => {

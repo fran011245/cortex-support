@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, Copy, Check, Bot, User, Loader2, RefreshCw, ClipboardPaste, X, Info } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, isMac } from "@/lib/utils";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -382,7 +382,13 @@ export function ChatInterface() {
   return (
     <div className="flex h-full flex-col bg-[#0A0F1C]">
       {/* Chat header */}
-      <div className="flex items-center justify-between border-b border-[#1E293B] px-6 py-3 bg-[#0A0F1C]/80 backdrop-blur">
+      <div
+        className={cn(
+          "flex items-center justify-between border-b border-[#1E293B] px-6 bg-[#0A0F1C]/80 backdrop-blur",
+          isMac ? "pt-[28px] pb-3" : "py-3"
+        )}
+        data-tauri-drag-region
+      >
         <div className="flex items-center gap-3">
           <div>
             <div className="font-semibold tracking-[-0.2px]">{currentSession.title}</div>

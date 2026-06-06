@@ -3,7 +3,7 @@ import { useAgentStore } from "@/stores/useAgentStore";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, MessageSquare, Settings, Trash2, Pencil } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, isMac } from "@/lib/utils";
 
 export function Sidebar() {
   const {
@@ -52,7 +52,13 @@ export function Sidebar() {
   return (
     <div className="flex h-full w-72 flex-col border-r border-[#1E293B] bg-[#0A0F1C]/95">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-[#1E293B] px-4 py-3">
+      <div
+        className={cn(
+          "flex items-center justify-between border-b border-[#1E293B] px-4",
+          isMac ? "pt-[28px] pb-3" : "py-3"
+        )}
+        data-tauri-drag-region
+      >
         <div className="flex items-center gap-2">
           <div className="h-7 w-7 rounded bg-[#3B82F6] flex items-center justify-center">
             <span className="text-[13px] font-semibold text-white tracking-[-1px]">C</span>
