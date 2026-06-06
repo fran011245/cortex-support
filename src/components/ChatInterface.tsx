@@ -1,20 +1,67 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useAgentStore } from "@/stores/useAgentStore";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Copy, Check, Bot, User, Loader2 } from "lucide-react";
+import { Send, Copy, Check, Bot, User, Loader2, RefreshCw, ClipboardPaste, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { loadLocalModel, streamCompletion, initQVAC } from "@/lib/qvac";
 import { getEffectiveSystemPrompt, DEFAULT_LLM_MODEL, RECOMMENDED_LLM_MODELS } from "@/lib/settings";
 import { ModelStatus } from "@/components/ModelStatus";
+
+// Detect common support ticket categories from pasted customer text.
+function detectTicketType(text: string): string | null {
+  const t = text.toLowerCase();
+  if (/\b(txid|withdrawal|withdraw|pending transfer|stuck|not arrived)\b/.test(t)) return "withdrawal inquiry";
+  if (/\b(deposit|credited|not received|missing funds|not showing)\b/.test(t)) return "deposit inquiry";
+  if (/\b(kyc|verification|document|identity|id proof|account limit)\b/.test(t)) return "KYC / verification";
+  if (/\b(api|endpoint|rate.?limit|signature|nonce|api key|integration)\b/.test(t)) return "API / integration issue";
+  if (/\b(comprom|2fa|hacked|suspicious|unauthorized|account.?access|security)\b/.test(t)) return "security concern";
+  if (text.trim().length > 40) return "support ticket";
+  return null;
+}
+
+// Custom markdown components styled for the Cortex dark theme.
+const mdComponents: React.ComponentProps<typeof ReactMarkdown>["components"] = {
+  p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+  ul: ({ children }) => <ul className="list-disc ml-4 mb-2 space-y-0.5">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal ml-4 mb-2 space-y-0.5">{children}</ol>,
+  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+  strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+  em: ({ children }) => <em className="italic text-foreground/80">{children}</em>,
+  code: ({ className, children }) => {
+    const isBlock = !!className;
+    return isBlock ? (
+      <code className="font-mono text-[12px] text-emerald-400">{children}</code>
+    ) : (
+      <code className="bg-[#0A0F1C] rounded px-1 py-0.5 text-[12px] font-mono text-[#3B82F6]">{children}</code>
+    );
+  },
+  pre: ({ children }) => (
+    <pre className="bg-[#0A0F1C] border border-[#1E293B] rounded-lg px-3 py-2.5 my-2 overflow-x-auto text-xs font-mono">
+      {children}
+    </pre>
+  ),
+  blockquote: ({ children }) => (
+    <blockquote className="border-l-2 border-[#3B82F6]/50 pl-3 my-2 text-muted-foreground italic">
+      {children}
+    </blockquote>
+  ),
+  h1: ({ children }) => <h1 className="font-semibold text-base mb-1.5 mt-3 first:mt-0">{children}</h1>,
+  h2: ({ children }) => <h2 className="font-semibold text-sm mb-1 mt-3 first:mt-0">{children}</h2>,
+  h3: ({ children }) => <h3 className="font-medium text-sm mb-1 mt-2 first:mt-0">{children}</h3>,
+  hr: () => <hr className="border-[#1E293B] my-3" />,
+};
 
 export function ChatInterface() {
   const {
     currentSession,
     appendMessage,
     updateLastMessage,
+    removeLastAssistantMessage,
     isStreaming,
     setStreaming,
     isLoading,
@@ -28,18 +75,41 @@ export function ChatInterface() {
   const [input, setInput] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isLoadingModel, setIsLoadingModel] = useState(false);
+  const [loadProgress, setLoadProgress] = useState<{ percentage?: number } | null>(null);
+  const [ticketInput, setTicketInput] = useState("");
+  const [isTicketPaneOpen, setIsTicketPaneOpen] = useState(false);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const ticketRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const messages = currentSession?.messages ?? [];
 
-  // Auto scroll to bottom
+  const detectedType = useMemo(() => detectTicketType(ticketInput), [ticketInput]);
+
+  // Auto scroll to bottom on new messages
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isStreaming]);
+
+  // Auto-expand main composer
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 280) + "px";
+  }, [input]);
+
+  // Auto-expand ticket textarea
+  useEffect(() => {
+    const el = ticketRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 220) + "px";
+  }, [ticketInput]);
 
   const copyToClipboard = async (text: string, id?: string) => {
     await navigator.clipboard.writeText(text);
@@ -55,63 +125,42 @@ export function ChatInterface() {
     toast.info("Ready to paste into support ticket", { description: "Use ⌘V / Ctrl+V in your support tool" });
   };
 
-  // Load the recommended default (or current settings default). Supports onProgress for download feedback.
-  const [loadProgress, setLoadProgress] = useState<{ percentage?: number } | null>(null);
-
   const loadTestModel = async (modelSrcOverride?: string, silent = false) => {
     setIsLoadingModel(true);
     setLoadProgress(null);
     try {
       await initQVAC();
-      const src = modelSrcOverride || DEFAULT_LLM_MODEL;
+      const src = modelSrcOverride || settings?.defaultModelId || DEFAULT_LLM_MODEL;
       const handle = await loadLocalModel({
         modelSrc: src,
         modelType: "llamacpp-completion",
         modelConfig: { ctx_size: 4096 },
         onProgress: (p) => setLoadProgress(p),
       });
-      setModelId(handle); // runtime handle (hash), not the src
+      setModelId(handle);
       if (!silent) {
         const label = RECOMMENDED_LLM_MODELS.find((m) => m.id === src)?.label || src;
         toast.success("Model loaded", { description: `${label} ready` });
       }
     } catch (e: any) {
-      console.error(e);
-      toast.error("Failed to load model", {
-        description: e?.message || "Check Node availability and console for host errors",
-      });
+      toast.error("Failed to load model", { description: e?.message || "Check console for errors" });
     } finally {
       setIsLoadingModel(false);
       setLoadProgress(null);
     }
   };
 
-  const sendMessage = async () => {
-    if (!input.trim() || isStreaming) return;
-
-    const userText = input.trim();
-    setInput("");
-
-    // Add user turn to visible chat
+  // Core generation — accepts optional text so regenerate can bypass the input field.
+  const sendMessageWithText = async (userText: string) => {
     appendMessage({ role: "user", content: userText });
-
-    // Add streaming assistant placeholder
     appendMessage({ role: "assistant", content: "", isStreaming: true });
 
     setStreaming(true);
     setLoading(true);
 
-    // === Core CS Agent: always use the current effective system prompt from Settings ===
-    // This is the "main CS Agent" implementation for Phase 2.
-    // It enforces the professional, direct, pragmatic, security-aware support tone.
     const systemPrompt = await getEffectiveSystemPrompt();
-
-    // Use fresh store state (avoids stale closures after async model load etc.)
     let state = useAgentStore.getState();
     const sessionMessages = state.currentSession?.messages || [];
-
-    // The last message is the empty assistant placeholder we just added for live updates.
-    // For the model, we only want turns up to (and including) the current user message.
     const turnsForModel = sessionMessages.slice(0, -1);
 
     const conversation = turnsForModel
@@ -123,11 +172,9 @@ export function ChatInterface() {
       ...conversation,
     ];
 
-    // RAG integration (Phase 5): if enabled, retrieve relevant chunks and inject as context
+    // RAG: inject relevant KB chunks when enabled
     let sources: any[] = [];
-    const ragEnabled = state.settings?.ragEnabled;
-    const ragFolder = state.settings?.ragFolderPath;
-    if (ragEnabled && ragFolder && userText) {
+    if (state.settings?.ragEnabled && state.settings?.ragFolderPath) {
       try {
         const { searchKnowledge } = await import("@/lib/rag");
         const hits = await searchKnowledge(userText, "cortex-kb", 5);
@@ -136,7 +183,6 @@ export function ChatInterface() {
           const contextBlock = hits
             .map((h: any, i: number) => `[Source ${i + 1}: ${h.source}]\n${h.text}`)
             .join("\n\n");
-          // Insert RAG context right after the main system prompt
           fullHistory = [
             fullHistory[0],
             { role: "system" as const, content: `Relevant internal knowledge (cite sources by number if used):\n${contextBlock}` },
@@ -144,33 +190,27 @@ export function ChatInterface() {
           ];
         }
       } catch (e) {
-        console.warn("[RAG] search failed in chat", e);
+        console.warn("[RAG] search failed", e);
       }
     }
 
-    // Ensure a model is loaded for the desired src (from settings or default). currentModelId holds the *runtime handle*
-    // (the hash returned by loadLocalModel), which must be passed to streamCompletion. The src spec (registry ID)
-    // is what we load *with*. We always ensure-load here so first message after start (or after settings change)
-    // works without requiring manual "Load" click.
+    // Ensure model is loaded — auto-load on first send if needed
     const desiredSrc = state.settings?.defaultModelId || DEFAULT_LLM_MODEL;
     let modelId = state.currentModelId;
     if (!modelId) {
-      toast.info(`Loading model (${desiredSrc}) for the CS Agent...`);
+      toast.info(`Loading model…`);
       try {
-        await loadTestModel(desiredSrc, true /*silent, info toast already shown*/);
+        await loadTestModel(desiredSrc, true);
         state = useAgentStore.getState();
         modelId = state.currentModelId || "";
       } catch {
-        // Will surface error in the stream call below
+        // will surface in stream call
       }
     }
-    if (!modelId) {
-      modelId = desiredSrc; // last resort (will likely fail in SDK with MODEL_NOT_FOUND if not loaded)
-    }
+    if (!modelId) modelId = desiredSrc;
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
-
     let liveText = "";
 
     try {
@@ -184,32 +224,30 @@ export function ChatInterface() {
           updateLastMessage({ content: liveText, isStreaming: true });
         },
         onThinking: (delta) => {
-          const msgs = state.currentSession?.messages || [];
+          const msgs = useAgentStore.getState().currentSession?.messages || [];
           const last = msgs[msgs.length - 1] as any;
           updateLastMessage({ thinking: ((last?.thinking || "") + delta) });
         },
         signal: controller.signal,
       });
 
-      const finalText = result.text || liveText;
       updateLastMessage({
-        content: finalText,
+        content: result.text || liveText,
         isStreaming: false,
         thinking: result.thinking,
         sources: sources.length ? sources : undefined,
       });
     } catch (e: any) {
-      const msgs = state.currentSession?.messages || [];
+      const msgs = useAgentStore.getState().currentSession?.messages || [];
       const lastContent = msgs[msgs.length - 1]?.content || "";
       if (e?.name === "AbortError" || String(e?.message || "").includes("Abort")) {
         updateLastMessage({ content: (liveText || lastContent) + "\n\n[stopped]", isStreaming: false });
       } else {
-        const errMsg = e?.message || "Model error";
         updateLastMessage({
-          content: (liveText || lastContent) + `\n\n[error: ${errMsg}]`,
+          content: (liveText || lastContent) + `\n\n[error: ${e?.message || "Model error"}]`,
           isStreaming: false,
         });
-        toast.error("Generation failed", { description: errMsg });
+        toast.error("Generation failed", { description: e?.message });
       }
     } finally {
       abortControllerRef.current = null;
@@ -218,13 +256,42 @@ export function ChatInterface() {
     }
   };
 
+  const sendMessage = async () => {
+    const text = input.trim();
+    if (!text || isStreaming) return;
+    setInput("");
+    await sendMessageWithText(text);
+  };
+
+  const handleRegenerate = async () => {
+    if (isStreaming) return;
+    const userText = removeLastAssistantMessage();
+    if (!userText) return;
+    await sendMessageWithText(userText);
+  };
+
+  const handleTicketDraft = async () => {
+    const ticket = ticketInput.trim();
+    if (!ticket) return;
+    setTicketInput("");
+    setIsTicketPaneOpen(false);
+    const label = detectedType ? ` (${detectedType})` : "";
+    const prompt = `Here's a customer message${label} — please draft a professional, ready-to-send reply:\n\n---\n${ticket}\n---`;
+    await sendMessageWithText(prompt);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
-    if (e.key === "Escape" && isStreaming) {
-      handleAbort();
+    if (e.key === "Escape" && isStreaming) handleAbort();
+  };
+
+  const handleTicketKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      setIsTicketPaneOpen(false);
+      setTicketInput("");
     }
   };
 
@@ -233,7 +300,7 @@ export function ChatInterface() {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
-    abortCurrent(); // updates store UI state
+    abortCurrent();
   };
 
   if (!currentSession) {
@@ -269,7 +336,7 @@ export function ChatInterface() {
               Stop
             </Button>
           )}
-          {currentModelId && (
+          {currentModelId && !isStreaming && (
             <Button size="sm" variant="ghost" onClick={() => loadTestModel()} disabled={isLoadingModel} className="h-7 text-xs">
               Reload model
             </Button>
@@ -281,17 +348,17 @@ export function ChatInterface() {
       <ScrollArea className="flex-1" ref={scrollRef as any}>
         <div className="mx-auto max-w-3xl space-y-6 px-6 py-8">
           {messages.length === 0 && (
-            <div className="py-16 text-center">
-              <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-3xl bg-[#121827] ring-1 ring-inset ring-white/10">
-                <Bot className="h-8 w-8 text-[#3B82F6]" />
+            <div className="py-12 text-center">
+              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-3xl bg-[#121827] ring-1 ring-inset ring-white/10">
+                <Bot className="h-7 w-7 text-[#3B82F6]" />
               </div>
               <div className="text-2xl font-semibold tracking-[-0.5px]">How can I help with this ticket?</div>
-              <p className="mt-3 max-w-md mx-auto text-sm text-muted-foreground">
-                Your Cortex Support Agent — always on-tone, 100% local. Uses your current Settings for personality, tone, and knowledge base.
+              <p className="mt-2 max-w-md mx-auto text-sm text-muted-foreground">
+                Paste a customer message for an instant draft, or describe the situation in the chat below.
               </p>
 
               {!currentModelId && (
-                <div className="mt-4">
+                <div className="mt-4 flex flex-col items-center gap-1">
                   <ModelStatus
                     currentModelId={currentModelId}
                     defaultModelId={settings?.defaultModelId}
@@ -300,12 +367,70 @@ export function ChatInterface() {
                     onLoad={() => loadTestModel()}
                     className="justify-center"
                   />
-                  <div className="mt-1 text-[10px] text-muted-foreground/70">Load once — subsequent chats are instant from cache.</div>
+                  <div className="text-[10px] text-muted-foreground/60">Load once — subsequent chats are instant from cache.</div>
                 </div>
               )}
 
-              <div className="mt-8 flex flex-wrap justify-center gap-2 text-xs">
-                {["Check deposit status", "Draft reply for delayed withdrawal", "Translate to Spanish", "Review my draft for tone", "KYC document help"].map((ex) => (
+              {/* Ticket paste panel */}
+              <div className="mt-8 mx-auto max-w-xl">
+                {!isTicketPaneOpen ? (
+                  <button
+                    onClick={() => { setIsTicketPaneOpen(true); setTimeout(() => ticketRef.current?.focus(), 50); }}
+                    className="w-full flex items-center gap-3 rounded-xl border border-dashed border-[#1E293B] bg-[#121827]/40 px-5 py-4 text-left hover:border-[#3B82F6]/40 hover:bg-[#121827]/70 transition-all group"
+                  >
+                    <ClipboardPaste className="h-5 w-5 text-[#3B82F6]/60 group-hover:text-[#3B82F6] shrink-0 transition-colors" />
+                    <div>
+                      <div className="text-sm font-medium text-foreground/80 group-hover:text-foreground transition-colors">Paste a customer message</div>
+                      <div className="text-xs text-muted-foreground mt-0.5">Cortex will draft a ready-to-send reply instantly</div>
+                    </div>
+                  </button>
+                ) : (
+                  <div className="rounded-xl border border-[#3B82F6]/30 bg-[#121827] p-4 text-left shadow-lg shadow-[#3B82F6]/5">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <ClipboardPaste className="h-4 w-4 text-[#3B82F6]" />
+                        <span className="text-sm font-medium">Customer message</span>
+                        {detectedType && (
+                          <span className="rounded-full bg-[#3B82F6]/15 border border-[#3B82F6]/30 px-2 py-0.5 text-[10px] text-[#3B82F6] font-medium">
+                            {detectedType}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => { setIsTicketPaneOpen(false); setTicketInput(""); }}
+                        className="text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <textarea
+                      ref={ticketRef}
+                      value={ticketInput}
+                      onChange={(e) => setTicketInput(e.target.value)}
+                      onKeyDown={handleTicketKeyDown}
+                      placeholder="Paste the customer's message here…"
+                      className="w-full min-h-[100px] resize-none bg-[#0A0F1C] border border-[#1E293B] rounded-lg px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-[#3B82F6]/50 focus:outline-none focus:ring-0 transition-colors"
+                    />
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className="text-[10px] text-muted-foreground/60">
+                        Esc to cancel
+                      </div>
+                      <Button
+                        onClick={handleTicketDraft}
+                        disabled={!ticketInput.trim() || isStreaming}
+                        className="btn-primary h-8 px-4 text-sm gap-1.5"
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                        Draft reply
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Quick chips */}
+              <div className="mt-5 flex flex-wrap justify-center gap-2 text-xs">
+                {["Draft reply for delayed withdrawal", "KYC document requirements", "API key troubleshooting", "Translate to Spanish", "Review my draft for tone"].map((ex) => (
                   <button
                     key={ex}
                     onClick={() => setInput(ex)}
@@ -315,11 +440,11 @@ export function ChatInterface() {
                   </button>
                 ))}
               </div>
-              <div className="mt-10 text-[10px] text-muted-foreground/60 tracking-widest uppercase">Type a message or use a sidebar tool</div>
+              <div className="mt-8 text-[10px] text-muted-foreground/50 tracking-widest uppercase">Or use a sidebar tool</div>
             </div>
           )}
 
-          {messages.map((msg) => (
+          {messages.map((msg, idx) => (
             <div
               key={msg.id}
               className={cn("group flex gap-3", msg.role === "user" ? "justify-end" : "")}
@@ -333,32 +458,43 @@ export function ChatInterface() {
               <div className={cn("max-w-[82%] space-y-1.5", msg.role === "user" ? "items-end" : "")}>
                 <div
                   className={cn(
-                    "rounded-2xl px-4 py-3 text-[14.5px] leading-relaxed whitespace-pre-wrap",
+                    "rounded-2xl px-4 py-3 text-[14.5px] leading-relaxed",
                     msg.role === "user"
-                      ? "bg-[#3B82F6] text-white rounded-br-md"
+                      ? "bg-[#3B82F6] text-white rounded-br-md whitespace-pre-wrap"
                       : "glass border border-white/5 rounded-bl-md",
                   )}
                 >
-                  {msg.content || (msg.isStreaming ? "…" : "")}
-                  {msg.isStreaming && (
-                    <span className="inline-block w-1.5 h-4 ml-0.5 align-[-1px] bg-white/70 animate-pulse" />
+                  {msg.role === "assistant" ? (
+                    <>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                        {msg.content || (msg.isStreaming ? "…" : "")}
+                      </ReactMarkdown>
+                      {msg.isStreaming && (
+                        <span className="inline-block w-1.5 h-4 ml-0.5 align-[-1px] bg-white/70 animate-pulse" />
+                      )}
+                    </>
+                  ) : (
+                    msg.content
                   )}
                 </div>
 
                 {msg.sources && msg.sources.length > 0 && (
-                  <div className="pl-1 text-[10px] text-muted-foreground/70 flex gap-1.5 items-center">
-                    Sources: {msg.sources.map((s, i) => (
-                      <span key={i} className="rounded bg-[#121827] px-1.5 py-px border border-[#1E293B]">{s.source.split("/").pop()}</span>
+                  <div className="pl-1 text-[10px] text-muted-foreground/70 flex flex-wrap gap-1.5 items-center">
+                    <span>Sources:</span>
+                    {msg.sources.map((s, i) => (
+                      <span key={i} className="rounded bg-[#121827] px-1.5 py-px border border-[#1E293B]">
+                        {s.source.split("/").pop()}
+                      </span>
                     ))}
                   </div>
                 )}
 
                 {msg.role === "assistant" && msg.content && !msg.isStreaming && (
-                  <div className="flex items-center gap-1.5 pl-1 opacity-70 group-hover:opacity-100 transition">
+                  <div className="flex items-center gap-1.5 pl-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-7 px-2 text-xs gap-1 text-muted-foreground"
+                      className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
                       onClick={() => copyToClipboard(msg.content, msg.id)}
                     >
                       {copiedId === msg.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
@@ -372,6 +508,19 @@ export function ChatInterface() {
                     >
                       Use as response
                     </Button>
+                    {/* Only show Regenerate on the last assistant message */}
+                    {idx === messages.length - 1 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                        onClick={handleRegenerate}
+                        disabled={isStreaming}
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Regenerate
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -401,9 +550,10 @@ export function ChatInterface() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask Cortex to draft a reply, improve text, or look up policy…"
-              className="min-h-[92px] resize-y bg-[#121827] border-[#1E293B] pr-14 text-[15px] placeholder:text-muted-foreground/60 focus:border-[#3B82F6]/60"
+              placeholder="Describe the situation, ask for a draft, or request edits…"
+              className="min-h-[72px] max-h-[280px] overflow-y-auto resize-none bg-[#121827] border-[#1E293B] pr-14 text-[15px] placeholder:text-muted-foreground/60 focus:border-[#3B82F6]/60"
               disabled={isStreaming}
+              rows={1}
             />
             <Button
               onClick={sendMessage}
@@ -414,9 +564,9 @@ export function ChatInterface() {
               {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>
-          <div className="mt-1.5 px-1 text-[10px] text-muted-foreground/60 flex justify-between">
-            <span>Enter to send • Shift+Enter for newline • Esc to stop</span>
-            <span>Local only • No data leaves this machine</span>
+          <div className="mt-1.5 px-1 text-[10px] text-muted-foreground/50 flex justify-between">
+            <span>Enter to send · Shift+Enter for newline · Esc to stop</span>
+            <span>100% local · no data leaves this machine</span>
           </div>
         </div>
       </div>
