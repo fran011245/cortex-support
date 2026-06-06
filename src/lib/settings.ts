@@ -182,3 +182,23 @@ export async function updateKnowledgeBaseMeta(docCount: number): Promise<void> {
     knowledgeBaseDocCount: docCount,
   });
 }
+
+/**
+ * Pure display helper: returns a short, friendly model name for UI (e.g. "Llama 3.2 1B Instruct").
+ * Falls back gracefully for custom paths/IDs (shows basename or truncated).
+ * Used only for presentation (header pill, etc.). Does not affect loading.
+ */
+export function getModelDisplayLabel(modelId: string | undefined): string {
+  if (!modelId) return "No model";
+  const match = RECOMMENDED_LLM_MODELS.find((m) => m.id === modelId);
+  if (match) {
+    // e.g. "Llama 3.2 1B Instruct (Q4_0, ultra-light ~0.5-1GB, fast)" -> "Llama 3.2 1B Instruct"
+    return match.label.split(" (")[0];
+  }
+  // Custom path or unknown registry id: show last segment, strip common ext
+  if (modelId.includes("/") || modelId.includes("\\")) {
+    const base = modelId.split(/[/\\]/).pop() || modelId;
+    return base.replace(/\.gguf$/i, "");
+  }
+  return modelId.length > 28 ? modelId.slice(0, 25) + "…" : modelId;
+}
