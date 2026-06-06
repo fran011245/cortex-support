@@ -6,6 +6,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { loadSettings, updateSettings as libUpdateSettings, type CSSettings } from "@/lib/settings";
+import { Store } from "@tauri-apps/plugin-store";
 
 export interface Message {
   id: string;
@@ -48,8 +49,10 @@ interface AgentState {
   newSession: () => void;
   loadSession: (id: string) => void;
   deleteSession: (id: string) => void;
+  renameSession: (id: string, newTitle: string) => void;
   appendMessage: (msg: Omit<Message, "id" | "timestamp">) => void;
   updateLastMessage: (patch: Partial<Message>) => void;
+  removeLastAssistantMessage: () => string | null;
   setStreaming: (streaming: boolean) => void;
   setLoading: (loading: boolean) => void;
   setModelId: (id: string) => void;
@@ -68,6 +71,78 @@ const createNewSession = (): ChatSession => ({
   updatedAt: new Date().toISOString(),
 });
 
+// Tauri Store persistence for sessions.
+// Survives app reinstalls / app data clear (unlike localStorage).
+// Uses the same @tauri-apps/plugin-store as settings ("cortex-sessions.json").
+//
+// Graceful degradation:
+// - Falls back to localStorage on any error (dev, first render before plugin ready, etc.)
+// - One-time migration from localStorage on first successful read.
+//
+// Note on async storage + Zustand persist:
+// Rehydration is async. In practice the UI shows default empty state for one frame
+// on cold start; the persisted sessions appear immediately after. This is acceptable
+// for a desktop app and matches how settings are loaded.
+let _sessionsStore: Store | null = null;
+
+async function getSessionsStore(): Promise<Store> {
+  if (!_sessionsStore) {
+    _sessionsStore = await Store.load("cortex-sessions.json", {
+      defaults: {},
+      autoSave: true,
+    });
+  }
+  return _sessionsStore;
+}
+
+const tauriStorage = {
+  getItem: async (name: string): Promise<string | null> => {
+    try {
+      const store = await getSessionsStore();
+      const value = await store.get<string>(name);
+      if (value != null) {
+        return value;
+      }
+
+      // One-time migration from localStorage (only if we have legacy data)
+      const legacy = localStorage.getItem(name);
+      if (legacy) {
+        await store.set(name, legacy);
+        await store.save();
+        localStorage.removeItem(name);
+        return legacy;
+      }
+      return null;
+    } catch (err) {
+      // Never block the app on storage issues
+      console.warn("[Cortex] tauriStorage.getItem fallback to localStorage", err);
+      return localStorage.getItem(name);
+    }
+  },
+
+  setItem: async (name: string, value: string): Promise<void> => {
+    try {
+      const store = await getSessionsStore();
+      await store.set(name, value);
+      await store.save();
+    } catch (err) {
+      console.warn("[Cortex] tauriStorage.setItem fallback to localStorage", err);
+      localStorage.setItem(name, value);
+    }
+  },
+
+  removeItem: async (name: string): Promise<void> => {
+    try {
+      const store = await getSessionsStore();
+      await store.delete(name);
+      await store.save();
+    } catch (err) {
+      console.warn("[Cortex] tauriStorage.removeItem fallback", err);
+      localStorage.removeItem(name);
+    }
+  },
+};
+
 export const useAgentStore = create<AgentState>()(
   persist(
     (set, get) => ({
@@ -83,11 +158,8 @@ export const useAgentStore = create<AgentState>()(
 
       init: async () => {
         const settings = await loadSettings();
-        // currentModelId holds the *runtime handle* (hash returned by loadModel) for this session only.
-        // It is NOT the persisted src spec. Default to empty so send logic will ensure-load using settings.defaultModelId.
         set({ settings, currentModelId: "" });
 
-        // Bootstrap first session if none
         const { sessions, currentSession } = get();
         if (!currentSession && sessions.length === 0) {
           const sess = createNewSession();
@@ -122,11 +194,21 @@ export const useAgentStore = create<AgentState>()(
             remaining.unshift(newCurrent);
           }
 
-          return {
-            sessions: remaining,
-            currentSession: newCurrent,
-          };
+          return { sessions: remaining, currentSession: newCurrent };
         });
+      },
+
+      renameSession: (id, newTitle) => {
+        const title = newTitle.trim() || "New conversation";
+        set((state) => ({
+          sessions: state.sessions.map((s) =>
+            s.id === id ? { ...s, title, updatedAt: new Date().toISOString() } : s,
+          ),
+          currentSession:
+            state.currentSession?.id === id
+              ? { ...state.currentSession, title }
+              : state.currentSession,
+        }));
       },
 
       appendMessage: (msg) => {
@@ -146,17 +228,13 @@ export const useAgentStore = create<AgentState>()(
             updatedAt: now,
             title:
               state.currentSession.title === "New conversation" && msg.role === "user"
-                ? msg.content.slice(0, 48) + (msg.content.length > 48 ? "..." : "")
+                ? msg.content.slice(0, 48) + (msg.content.length > 48 ? "…" : "")
                 : state.currentSession.title,
           };
 
-          const sessions = state.sessions.map((s) =>
-            s.id === updated.id ? updated : s,
-          );
-
           return {
             currentSession: updated,
-            sessions,
+            sessions: state.sessions.map((s) => (s.id === updated.id ? updated : s)),
           };
         });
       },
@@ -168,8 +246,7 @@ export const useAgentStore = create<AgentState>()(
           const msgs = [...state.currentSession.messages];
           if (msgs.length === 0) return state;
 
-          const last = { ...msgs[msgs.length - 1], ...patch };
-          msgs[msgs.length - 1] = last;
+          msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], ...patch };
 
           const updated: ChatSession = {
             ...state.currentSession,
@@ -177,23 +254,47 @@ export const useAgentStore = create<AgentState>()(
             updatedAt: new Date().toISOString(),
           };
 
-          const sessions = state.sessions.map((s) =>
-            s.id === updated.id ? updated : s,
-          );
-
-          return { currentSession: updated, sessions };
+          return {
+            currentSession: updated,
+            sessions: state.sessions.map((s) => (s.id === updated.id ? updated : s)),
+          };
         });
+      },
+
+      // Removes the last assistant message and returns the preceding user message text.
+      // Used by the Regenerate button to re-run the same user turn.
+      removeLastAssistantMessage: () => {
+        let precedingUserText: string | null = null;
+
+        set((state) => {
+          if (!state.currentSession) return state;
+          const msgs = [...state.currentSession.messages];
+
+          let lastAssistantIdx = -1;
+          for (let i = msgs.length - 1; i >= 0; i--) {
+            if (msgs[i].role === "assistant") { lastAssistantIdx = i; break; }
+          }
+          if (lastAssistantIdx === -1) return state;
+
+          for (let i = lastAssistantIdx - 1; i >= 0; i--) {
+            if (msgs[i].role === "user") { precedingUserText = msgs[i].content; break; }
+          }
+
+          const trimmed = msgs.slice(0, lastAssistantIdx);
+          const updated = { ...state.currentSession, messages: trimmed, updatedAt: new Date().toISOString() };
+          return {
+            currentSession: updated,
+            sessions: state.sessions.map((s) => (s.id === updated.id ? updated : s)),
+          };
+        });
+
+        return precedingUserText;
       },
 
       setStreaming: (streaming) => set({ isStreaming: streaming }),
       setLoading: (loading) => set({ isLoading: loading }),
 
-      setModelId: (id) => {
-        // id here must be the runtime handle returned by loadModel (short hash), used for complete/stream calls.
-        // Never overwrite settings.defaultModelId here — that holds the load *spec* (registry ID or path) and is
-        // only mutated through settings flows (Apply, or explicit in load button after choosing src).
-        set({ currentModelId: id });
-      },
+      setModelId: (id) => set({ currentModelId: id }),
 
       setSettingsOpen: (open) => set({ isSettingsOpen: open }),
       setActiveTool: (tool) => set({ activeTool: tool }),
@@ -229,11 +330,11 @@ export const useAgentStore = create<AgentState>()(
     }),
     {
       name: "cortex-agent-store",
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => tauriStorage),
       partialize: (state) => ({
         sessions: state.sessions,
         currentSession: state.currentSession,
-        // Do not persist currentModelId: it is a per-process runtime handle (hash) from loadModel, invalid after restart.
+        // currentModelId is a per-process runtime handle — never persist it
       }),
     },
   ),
