@@ -16,6 +16,10 @@ export interface Message {
   sources?: Array<{ text: string; source: string; score?: number }>;
   timestamp: string;
   isStreaming?: boolean;
+  // Usage / consumption stats from the model (prompt/completion tokens, timings, etc.)
+  // Populated from streamCompletion result.stats for finished assistant turns.
+  // Kept as any for flexibility (shape comes from the stable QVAC host/llama.cpp).
+  stats?: any;
 }
 
 export interface ChatSession {

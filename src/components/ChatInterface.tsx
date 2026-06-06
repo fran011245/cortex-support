@@ -13,6 +13,50 @@ import { getEffectiveSystemPrompt, DEFAULT_LLM_MODEL, RECOMMENDED_LLM_MODELS } f
 import { ModelStatus } from "@/components/ModelStatus";
 import { detectTicketType } from "@/lib/ticketDetection";
 
+/**
+ * Minimalist formatter for model consumption stats.
+ * Gracefully handles the stats shape coming from the QVAC host (llama.cpp style).
+ * Common fields: prompt_n / predicted_n (tokens), various timing fields.
+ * We prioritize clear "in / out" + speed when available.
+ */
+function formatModelStats(stats: any, liveCount?: number): string | null {
+  if (!stats && (liveCount == null || liveCount === 0)) return null;
+
+  const prompt = stats?.prompt_n ?? stats?.promptTokens ?? stats?.input_tokens;
+  const completion = stats?.predicted_n ?? stats?.completionTokens ?? stats?.output_tokens ?? stats?.predicted_tokens;
+  const total = stats?.total_tokens ?? (prompt != null && completion != null ? prompt + completion : null);
+
+  // Speed: tokens per second (various possible field names from the backend)
+  const tps =
+    stats?.predicted_per_second ??
+    stats?.tokens_per_second ??
+    (stats?.predicted_ms && stats?.predicted_n
+      ? (stats.predicted_n / (stats.predicted_ms / 1000)).toFixed(1)
+      : null);
+
+  const parts: string[] = [];
+
+  if (liveCount != null && liveCount > 0) {
+    parts.push(`~${liveCount} tokens`);
+    if (tps) parts.push(`${tps} t/s`);
+    return parts.join(" • ") + " • streaming";
+  }
+
+  if (prompt != null) parts.push(`${prompt} in`);
+  if (completion != null) parts.push(`${completion} out`);
+  if (total != null && prompt == null && completion == null) parts.push(`${total} tokens`);
+  if (tps) parts.push(`${typeof tps === "number" ? tps.toFixed(1) : tps} t/s`);
+
+  // Fallback: if we have raw numbers but no recognized shape, show a compact hint
+  if (parts.length === 0 && stats) {
+    const keys = Object.keys(stats).filter((k) => /token|prompt|predict|total/i.test(k)).slice(0, 2);
+    if (keys.length) return keys.map((k) => `${k}:${stats[k]}`).join(" ");
+    return null;
+  }
+
+  return parts.length ? parts.join(" • ") : null;
+}
+
 // Custom markdown components styled for the Cortex dark theme.
 const mdComponents: React.ComponentProps<typeof ReactMarkdown>["components"] = {
   p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
@@ -88,6 +132,10 @@ export function ChatInterface() {
   const [ticketInput, setTicketInput] = useState("");
   const [isTicketPaneOpen, setIsTicketPaneOpen] = useState(false);
 
+  // Live token counter for minimalist usage stats while streaming (approximate).
+  // Reset per turn. On final we prefer the authoritative stats from the backend.
+  const [liveTokenCount, setLiveTokenCount] = useState(0);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const ticketRef = useRef<HTMLTextAreaElement>(null);
@@ -96,6 +144,12 @@ export function ChatInterface() {
   const messages = currentSession?.messages ?? [];
 
   const detectedType = useMemo(() => detectTicketType(ticketInput), [ticketInput]);
+
+  // Last finished assistant stats for the subtle header consumption hint
+  const lastTurnStats = useMemo(() => {
+    const last = [...messages].reverse().find((m) => m.role === "assistant" && m.stats);
+    return last?.stats ? formatModelStats(last.stats) : null;
+  }, [messages]);
 
   // Auto scroll to bottom on new messages
   useEffect(() => {
@@ -166,6 +220,7 @@ export function ChatInterface() {
 
     setStreaming(true);
     setLoading(true);
+    setLiveTokenCount(0); // fresh turn for live usage stats
 
     const systemPrompt = await getEffectiveSystemPrompt();
     let state = useAgentStore.getState();
@@ -230,6 +285,7 @@ export function ChatInterface() {
         maxTokens: state.settings?.maxTokens ?? 1024,
         onToken: (delta) => {
           liveText += delta;
+          setLiveTokenCount((c) => c + 1);
           updateLastMessage({ content: liveText, isStreaming: true });
         },
         onThinking: (delta) => {
@@ -245,12 +301,15 @@ export function ChatInterface() {
         isStreaming: false,
         thinking: result.thinking,
         sources: sources.length ? sources : undefined,
+        stats: result.stats,
       });
+      setLiveTokenCount(0);
     } catch (e: any) {
       const msgs = useAgentStore.getState().currentSession?.messages || [];
       const lastContent = msgs[msgs.length - 1]?.content || "";
       if (e?.name === "AbortError" || String(e?.message || "").includes("Abort")) {
         updateLastMessage({ content: (liveText || lastContent) + "\n\n[stopped]", isStreaming: false });
+        setLiveTokenCount(0);
       } else {
         updateLastMessage({
           content: (liveText || lastContent) + `\n\n[error: ${e?.message || "Model error"}]`,
@@ -336,6 +395,12 @@ export function ChatInterface() {
               className="mt-0.5"
               compact
             />
+            {/* Minimalist session/turn consumption hint in header (always visible, very small) */}
+            {lastTurnStats && (
+              <span className="ml-2 text-[9px] text-muted-foreground/50 font-mono border-l border-[#1E293B] pl-2">
+                {lastTurnStats}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -495,6 +560,20 @@ export function ChatInterface() {
                         {s.source.split("/").pop()}
                       </span>
                     ))}
+                  </div>
+                )}
+
+                {/* Minimalist model consumption stats — shown for finished assistant turns.
+                    Uses backend stats (prompt_n / predicted_n etc.) + live count while streaming.
+                    Styled to match the existing tiny sources / status tags. */}
+                {msg.role === "assistant" && !msg.isStreaming && msg.stats && (
+                  <div className="pl-1 text-[10px] text-muted-foreground/60 font-mono">
+                    {formatModelStats(msg.stats)}
+                  </div>
+                )}
+                {msg.role === "assistant" && msg.isStreaming && liveTokenCount > 0 && idx === messages.length - 1 && (
+                  <div className="pl-1 text-[10px] text-muted-foreground/60 font-mono">
+                    {formatModelStats(null, liveTokenCount)}
                   </div>
                 )}
 
