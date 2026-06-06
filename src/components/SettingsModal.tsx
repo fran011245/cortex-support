@@ -20,7 +20,8 @@ import type { CSSettings } from "@/lib/settings";
 import { loadLocalModel, listCachedModels } from "@/lib/qvac";
 import { DEFAULT_LLM_MODEL, DEFAULT_EMBED_MODEL, RECOMMENDED_LLM_MODELS } from "@/lib/settings";
 import { toast } from "sonner";
-import { FolderOpen, RefreshCw } from "lucide-react";
+import { FolderOpen, RefreshCw, Info } from "lucide-react";
+import { MODEL_GUIDE, GUIDE_COMMON_NOTES } from "@/lib/modelGuide";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { check } from "@tauri-apps/plugin-updater";
@@ -34,6 +35,7 @@ export function SettingsModal() {
   const [cachedModels, setCachedModels] = useState<{ modelsDir?: string; files?: string[] } | null>(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<any>(null);
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   useEffect(() => {
     if (settings) setLocal(settings);
@@ -178,7 +180,8 @@ export function SettingsModal() {
   };
 
   return (
-    <Dialog open={isSettingsOpen} onOpenChange={setSettingsOpen}>
+    <>
+      <Dialog open={isSettingsOpen} onOpenChange={setSettingsOpen}>
       <DialogContent className="max-w-3xl bg-[#0A0F1C] border-[#1E293B] text-foreground p-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-2 border-b border-[#1E293B]">
           <DialogTitle className="text-xl tracking-[-0.3px]">CS Settings</DialogTitle>
@@ -336,6 +339,18 @@ export function SettingsModal() {
                       {m.label.split(" (")[0]}
                     </Button>
                   ))}
+                </div>
+
+                <div className="pt-1 flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setIsGuideOpen(true)}
+                    className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+                  >
+                    <Info className="h-3.5 w-3.5" />
+                    Guía de modelos (Mac)
+                  </Button>
                 </div>
 
                 <div className="pt-1">
@@ -545,5 +560,69 @@ export function SettingsModal() {
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* In-App Model Guide Dialog — Mac optimized */}
+    <Dialog open={isGuideOpen} onOpenChange={setIsGuideOpen}>
+      <DialogContent className="max-w-3xl bg-[#0A0F1C] border-[#1E293B] text-foreground p-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-6 pb-2 border-b border-[#1E293B]">
+          <DialogTitle className="text-xl tracking-[-0.3px]">Guía de Modelos — Optimizado para Mac</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            Características y requerimientos técnicos para Apple Silicon (unified memory). Todos corren 100% local vía QVAC.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="p-6 space-y-6">
+          {MODEL_GUIDE.map((model) => (
+            <div
+              key={model.id}
+              className="glass border border-[#1E293B] rounded-xl p-4 space-y-3"
+            >
+              <div>
+                <div className="font-semibold text-lg tracking-[-0.2px]">{model.name}</div>
+                <div className="text-[11px] text-muted-foreground font-mono">{model.quant} • {model.ctx}</div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-0.5">RAM en Mac</div>
+                  <div>{model.ramMac}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-0.5">Performance en Apple Silicon</div>
+                  <div>{model.performanceMac}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-0.5">Mejor para</div>
+                  <div>{model.bestFor}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-0.5">Velocidad vs Calidad</div>
+                  <div>{model.speedVsQuality}</div>
+                </div>
+              </div>
+
+              <div className="text-xs text-muted-foreground/80 pt-1 border-t border-[#1E293B]/60">
+                {model.notes}
+              </div>
+            </div>
+          ))}
+
+          <div className="text-[11px] text-muted-foreground/70 space-y-1 pt-2 border-t border-[#1E293B]">
+            {GUIDE_COMMON_NOTES.map((note, i) => (
+              <div key={i}>• {note}</div>
+            ))}
+          </div>
+
+          <div className="text-[11px] text-[#3B82F6]/80 pt-2">
+            Tip: Las estadísticas minimalistas de consumo (tokens, contexto, t/s) que ahora ves en el chat te ayudan a elegir el modelo correcto según tu Mac y flujo de trabajo.
+          </div>
+        </div>
+
+        <div className="flex justify-end border-t border-[#1E293B] bg-[#121827]/60 px-6 py-4">
+          <Button variant="ghost" onClick={() => setIsGuideOpen(false)}>Cerrar</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
