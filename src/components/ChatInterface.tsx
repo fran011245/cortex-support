@@ -3,12 +3,12 @@ import { useAgentStore } from "@/stores/useAgentStore";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Copy, Check, Bot, User, Loader2, Cpu } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Send, Copy, Check, Bot, User, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { loadLocalModel, streamCompletion, initQVAC } from "@/lib/qvac";
 import { getEffectiveSystemPrompt, DEFAULT_LLM_MODEL, RECOMMENDED_LLM_MODELS } from "@/lib/settings";
+import { ModelStatus } from "@/components/ModelStatus";
 
 export function ChatInterface() {
   const {
@@ -22,6 +22,7 @@ export function ChatInterface() {
     currentModelId,
     setModelId,
     abortCurrent,
+    settings,
   } = useAgentStore();
 
   const [input, setInput] = useState("");
@@ -250,31 +251,16 @@ export function ChatInterface() {
         <div className="flex items-center gap-3">
           <div>
             <div className="font-semibold tracking-[-0.2px]">{currentSession.title}</div>
-            <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-              <span>Local model</span>
-              <span className={cn("inline-block h-1 w-1 rounded-full", currentModelId ? "bg-emerald-500" : "bg-amber-500")} />
-              {isLoadingModel ? (
-                <Skeleton className="h-3 w-24 inline-block align-middle" />
-              ) : (
-                <span className="font-mono text-[10px]">{currentModelId || "not loaded"}</span>
-              )}
-              {loadProgress && loadProgress.percentage != null && (
-                <span className="ml-2 text-[10px] text-[#3B82F6]">{Math.round(loadProgress.percentage)}%</span>
-              )}
-            </div>
+            <ModelStatus
+              currentModelId={currentModelId}
+              defaultModelId={settings?.defaultModelId}
+              isLoading={isLoadingModel}
+              progress={loadProgress?.percentage}
+              onLoad={() => loadTestModel()}
+              className="mt-0.5"
+              compact
+            />
           </div>
-          {!currentModelId && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => loadTestModel()}
-              disabled={isLoadingModel}
-              className="h-7 gap-1.5 border-[#1E293B] text-xs"
-            >
-              <Cpu className="h-3.5 w-3.5" />
-              {isLoadingModel ? (loadProgress ? `Loading ${Math.round(loadProgress.percentage || 0)}%...` : "Loading...") : "Load recommended model"}
-            </Button>
-          )}
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <div className="rounded bg-[#121827] px-2 py-0.5 border border-[#1E293B]">100% private</div>
@@ -303,6 +289,21 @@ export function ChatInterface() {
               <p className="mt-3 max-w-md mx-auto text-sm text-muted-foreground">
                 Your Cortex Support Agent — always on-tone, 100% local. Uses your current Settings for personality, tone, and knowledge base.
               </p>
+
+              {!currentModelId && (
+                <div className="mt-4">
+                  <ModelStatus
+                    currentModelId={currentModelId}
+                    defaultModelId={settings?.defaultModelId}
+                    isLoading={isLoadingModel}
+                    progress={loadProgress?.percentage}
+                    onLoad={() => loadTestModel()}
+                    className="justify-center"
+                  />
+                  <div className="mt-1 text-[10px] text-muted-foreground/70">Load once — subsequent chats are instant from cache.</div>
+                </div>
+              )}
+
               <div className="mt-8 flex flex-wrap justify-center gap-2 text-xs">
                 {["Check deposit status", "Draft reply for delayed withdrawal", "Translate to Spanish", "Review my draft for tone", "KYC document help"].map((ex) => (
                   <button
