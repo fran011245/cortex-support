@@ -16,6 +16,10 @@ export interface Message {
   sources?: Array<{ text: string; source: string; score?: number }>;
   timestamp: string;
   isStreaming?: boolean;
+  // Usage / consumption stats from the model (prompt/completion tokens, timings, etc.)
+  // Populated from streamCompletion result.stats for finished assistant turns.
+  // Kept as any for flexibility (shape comes from the stable QVAC host/llama.cpp).
+  stats?: any;
 }
 
 export interface ChatSession {
@@ -104,12 +108,14 @@ const tauriStorage = {
         return value;
       }
 
-      // One-time migration from localStorage (only if we have legacy data)
+      // One-time migration from localStorage (only if we have legacy data).
+      // Only remove from localStorage AFTER confirming Tauri Store has it.
       const legacy = localStorage.getItem(name);
       if (legacy) {
         await store.set(name, legacy);
         await store.save();
-        localStorage.removeItem(name);
+        const verify = await store.get<string>(name);
+        if (verify != null) localStorage.removeItem(name);
         return legacy;
       }
       return null;
@@ -174,12 +180,13 @@ export const useAgentStore = create<AgentState>()(
         set((state) => ({
           currentSession: sess,
           sessions: [sess, ...state.sessions],
+          activeTool: "chat",
         }));
       },
 
       loadSession: (id) => {
         const sess = get().sessions.find((s) => s.id === id);
-        if (sess) set({ currentSession: sess });
+        if (sess) set({ currentSession: sess, activeTool: "chat" });
       },
 
       deleteSession: (id) => {

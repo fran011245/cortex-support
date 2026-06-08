@@ -1,6 +1,7 @@
 import { useAgentStore } from "@/stores/useAgentStore";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import { cn, isMac } from "@/lib/utils";
 import { GrammarCheck } from "./tools/GrammarCheck";
 import { SmartTranslate } from "./tools/SmartTranslate";
 import { ResponseTemplates } from "./tools/ResponseTemplates";
@@ -20,7 +21,13 @@ export function ToolsView() {
   return (
     <div className="flex h-full flex-col bg-[#0A0F1C]">
       {/* Tool header */}
-      <div className="flex items-center justify-between border-b border-[#1E293B] px-6 py-3 bg-[#0A0F1C]/80 backdrop-blur">
+      <div
+        className={cn(
+          "flex items-center justify-between border-b border-[#1E293B] px-6 bg-[#0A0F1C]/80 backdrop-blur",
+          isMac ? "pt-[28px] pb-3" : "py-3"
+        )}
+        data-tauri-drag-region
+      >
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"

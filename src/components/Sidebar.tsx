@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useAgentStore } from "@/stores/useAgentStore";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, MessageSquare, Settings, Trash2, Pencil } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, isMac } from "@/lib/utils";
 
 export function Sidebar() {
   const {
@@ -52,7 +51,13 @@ export function Sidebar() {
   return (
     <div className="flex h-full w-72 flex-col border-r border-[#1E293B] bg-[#0A0F1C]/95">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-[#1E293B] px-4 py-3">
+      <div
+        className={cn(
+          "flex items-center justify-between border-b border-[#1E293B] px-4",
+          isMac ? "pt-[28px] pb-3" : "py-3"
+        )}
+        data-tauri-drag-region
+      >
         <div className="flex items-center gap-2">
           <div className="h-7 w-7 rounded bg-[#3B82F6] flex items-center justify-center">
             <span className="text-[13px] font-semibold text-white tracking-[-1px]">C</span>
@@ -84,11 +89,13 @@ export function Sidebar() {
       </div>
 
       {/* Chat History */}
-      <div className="px-3 pb-1 text-[10px] uppercase tracking-widest text-muted-foreground/70 font-medium pl-4">
+      <div className="px-4 pb-1 text-[10px] uppercase tracking-widest text-muted-foreground/70 font-medium">
         History
       </div>
-      <ScrollArea className="flex-1 px-2">
-        <div className="space-y-1 py-1">
+
+      {/* Plain scrollable div — avoids Radix ScrollArea's display:table wrapper
+          which breaks flex width containment and pushes buttons off-screen. */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-1 space-y-0.5">
           {sessions.length === 0 && (
             <div className="px-3 py-6 text-center text-xs text-muted-foreground">
               No conversations yet
@@ -99,33 +106,34 @@ export function Sidebar() {
               key={session.id}
               onClick={() => renamingId !== session.id && loadSession(session.id)}
               className={cn(
-                "group flex items-center justify-between rounded-md px-3 py-2 text-sm cursor-pointer hover:bg-[#121827] transition-colors",
+                "group flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-sm cursor-pointer hover:bg-[#121827] transition-colors",
                 currentSession?.id === session.id && "bg-[#121827] border-l-2 border-[#3B82F6]",
               )}
             >
-              <div className="flex min-w-0 items-center gap-2.5 flex-1">
-                <MessageSquare className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              {/* Icon — fixed width, never shrinks */}
+              <MessageSquare className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
 
-                {renamingId === session.id ? (
-                  <input
-                    ref={renameInputRef}
-                    value={renameValue}
-                    onChange={(e) => setRenameValue(e.target.value)}
-                    onKeyDown={handleRenameKeyDown}
-                    onBlur={commitRename}
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex-1 min-w-0 bg-[#1E293B] border border-[#3B82F6]/50 rounded px-1.5 py-0.5 text-sm text-foreground focus:outline-none focus:ring-0"
-                  />
-                ) : (
-                  <span className="truncate text-foreground/90">{session.title}</span>
-                )}
-              </div>
+              {/* Title — takes all remaining space, truncates */}
+              {renamingId === session.id ? (
+                <input
+                  ref={renameInputRef}
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onKeyDown={handleRenameKeyDown}
+                  onBlur={commitRename}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex-1 min-w-0 bg-[#1E293B] border border-[#3B82F6]/50 rounded px-1.5 py-0.5 text-sm text-foreground focus:outline-none focus:ring-0"
+                />
+              ) : (
+                <span className="flex-1 min-w-0 truncate text-foreground/90">{session.title}</span>
+              )}
 
+              {/* Actions — fixed width, never shrinks, always to the right */}
               {renamingId !== session.id && (
-                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
+                <div className="flex shrink-0 items-center gap-0.5">
                   <button
                     onClick={(e) => startRename(session.id, session.title, e)}
-                    className="p-1 text-muted-foreground hover:text-foreground transition-colors rounded"
+                    className="p-1 rounded text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground transition-all"
                     title="Rename"
                   >
                     <Pencil className="h-3 w-3" />
@@ -135,7 +143,16 @@ export function Sidebar() {
                       e.stopPropagation();
                       deleteSession(session.id);
                     }}
-                    className="p-1 text-muted-foreground hover:text-destructive transition-colors rounded"
+                    className="p-1 rounded"
+                    style={{ color: "#64748B", opacity: 0.45 }}
+                    onMouseEnter={e => {
+                      (e.currentTarget as HTMLElement).style.opacity = "1";
+                      (e.currentTarget as HTMLElement).style.color = "#f87171";
+                    }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLElement).style.opacity = "0.45";
+                      (e.currentTarget as HTMLElement).style.color = "#64748B";
+                    }}
                     title="Delete"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -144,8 +161,7 @@ export function Sidebar() {
               )}
             </div>
           ))}
-        </div>
-      </ScrollArea>
+      </div>
 
       {/* Tools */}
       <div className="border-t border-[#1E293B] p-3 space-y-1">
