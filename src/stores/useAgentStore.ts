@@ -108,12 +108,14 @@ const tauriStorage = {
         return value;
       }
 
-      // One-time migration from localStorage (only if we have legacy data)
+      // One-time migration from localStorage (only if we have legacy data).
+      // Only remove from localStorage AFTER confirming Tauri Store has it.
       const legacy = localStorage.getItem(name);
       if (legacy) {
         await store.set(name, legacy);
         await store.save();
-        localStorage.removeItem(name);
+        const verify = await store.get<string>(name);
+        if (verify != null) localStorage.removeItem(name);
         return legacy;
       }
       return null;
