@@ -8,6 +8,24 @@ Everything runs **100% locally** using the **@qvac/sdk** (Tether's local AI engi
 
 This project is open source. We believe great support tools should be transparent, customizable, and community-driven. Contributions, feedback, and forks are welcome!
 
+## Why Open Source Cortex?
+
+Support work is high-stakes, high-context, and deeply human. The tools agents use should reflect that.
+
+We open-sourced Cortex because:
+
+- **Transparency & Trust** — When handling sensitive customer issues (especially in finance, crypto, or enterprise), teams need to be able to audit exactly what the AI is doing and what data it sees. 100% local + visible prompts (the Live Effective Prompt) is table stakes.
+- **Customization Without Lock-in** — Every support team has its own voice, policies, internal runbooks, and edge cases. Cortex lets teams evolve the agent's personality and knowledge entirely through Settings — no code changes required. Open source means you can always fork, extend, or self-host if your needs change.
+- **Better Tools Through Community** — Local AI for professional use is still early. By sharing the patterns (Tauri + local LLM orchestration, thoughtful RAG UX, Mac-optimized model guidance, calm and premium interface), we hope to raise the bar for everyone building in this space.
+- **Respect for the Craft** — Support agents are experts. Cortex is designed to amplify their expertise, not replace their judgment. Open source aligns with that respect — the project belongs to the people who use it every day.
+
+By making Cortex open source we hope more teams can:
+- Run a private, fully-controlled co-pilot internally
+- Contribute improvements that benefit the whole community (new tools, better onboarding, refined tone systems, etc.)
+- Learn from and build upon a real-world example of beautiful, responsible local AI UX
+
+We’re not trying to build the next big AI company. We’re trying to build a tool that makes excellent support work a little easier, clearer, and more consistent — and we believe the best way to do that is together.
+
 ---
 
 ## ✨ What Cortex Does for Support Teams
