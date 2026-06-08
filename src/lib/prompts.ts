@@ -131,6 +131,18 @@ export function buildSystemPrompt(
 }
 
 /**
+ * Rough token estimator for UI feedback only (not for exact context calculation).
+ * Good enough for "how big is this prompt?" signals in the composer.
+ * ~3.7 chars per token is a reasonable average for the models we use (Llama/Qwen GGUF).
+ */
+export function estimateTokens(text: string): number {
+  if (!text || text.length === 0) return 0;
+  // Add a small overhead for the structure we add (tone rules + extra)
+  const base = Math.ceil(text.length / 3.7);
+  return Math.max(1, base);
+}
+
+/**
  * Common quick templates / starters for common support scenarios.
  * These are used by the Tools panel to seed good replies fast.
  */

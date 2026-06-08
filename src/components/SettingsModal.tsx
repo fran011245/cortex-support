@@ -15,13 +15,14 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAgentStore } from "@/stores/useAgentStore";
-import { DEFAULT_SYSTEM_PROMPT, TONE_PRESETS, type ToneRules, buildSystemPrompt } from "@/lib/prompts";
+import { DEFAULT_SYSTEM_PROMPT, TONE_PRESETS, type ToneRules, buildSystemPrompt, estimateTokens } from "@/lib/prompts";
 import type { CSSettings } from "@/lib/settings";
 import { loadLocalModel, listCachedModels } from "@/lib/qvac";
 import { DEFAULT_LLM_MODEL, DEFAULT_EMBED_MODEL, RECOMMENDED_LLM_MODELS } from "@/lib/settings";
 import { toast } from "sonner";
-import { FolderOpen, RefreshCw, Info, Settings, Bot, Database } from "lucide-react";
+import { FolderOpen, RefreshCw, Info, Settings, Bot, Database, Check, Copy } from "lucide-react";
 import { MODEL_GUIDE, GUIDE_COMMON_NOTES } from "@/lib/modelGuide";
+import { RecommendedModels } from "@/components/RecommendedModels";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { check } from "@tauri-apps/plugin-updater";
@@ -29,7 +30,7 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 
 export function SettingsModal() {
-  const { isSettingsOpen, setSettingsOpen, settings, updateSettings, setModelId } = useAgentStore();
+  const { isSettingsOpen, setSettingsOpen, settings, updateSettings, setModelId, setOnboardingOpen } = useAgentStore();
   const [local, setLocal] = useState(settings);
   const [isReindexing, setIsReindexing] = useState(false);
   const [modelLoadProgress, setModelLoadProgress] = useState<{ percentage?: number } | null>(null);
@@ -37,12 +38,17 @@ export function SettingsModal() {
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<any>(null);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [loadingTarget, setLoadingTarget] = useState<string | null>(null);
+  const [lastLoadedSpec, setLastLoadedSpec] = useState<string | null>(null);
 
   useEffect(() => {
     if (settings) setLocal(settings);
   }, [settings, isSettingsOpen]);
 
   if (!local) return null;
+
+  // Compute once per render — used by the prominent live preview (Fase 2) and anywhere else we show the composed result.
+  const effectivePrompt = buildSystemPrompt(local.systemPrompt, local.toneRules, local.extraInstructions);
 
   // Live persist helper for safe, non-heavy fields (prompt, tone, sliders, toggles, etc.)
   // Persist happens immediately so chat reads (getEffectiveSystemPrompt + direct settings) see updates for next generation.
@@ -80,6 +86,31 @@ export function SettingsModal() {
 
   const updateTone = (patch: Partial<ToneRules>) => {
     setAndPersist({ toneRules: patch as any });
+  };
+
+  // Premium model loading with per-target progress + state tracking.
+  // Sets both runtime handle and persists the spec as defaultModelId (live-apply safe).
+  const loadModel = async (src: string) => {
+    setLoadingTarget(src);
+    setModelLoadProgress(null);
+    try {
+      const handle = await loadLocalModel({
+        modelSrc: src,
+        modelType: "llamacpp-completion",
+        modelConfig: { ctx_size: 4096 },
+        onProgress: (p) => setModelLoadProgress(p),
+      });
+      setModelId(handle);
+      await updateSettings({ defaultModelId: src });
+      setLastLoadedSpec(src);
+      setLocal((prev) => prev && ({ ...prev, defaultModelId: src }));
+      toast.success("Model ready", { description: src });
+    } catch (e: any) {
+      toast.error("Load failed", { description: e?.message || "See console" });
+    } finally {
+      setLoadingTarget(null);
+      setModelLoadProgress(null);
+    }
   };
 
   const pickRagFolder = async () => {
@@ -199,59 +230,107 @@ export function SettingsModal() {
   return (
     <>
       <Dialog open={isSettingsOpen} onOpenChange={setSettingsOpen}>
-      <DialogContent className="max-w-3xl bg-background border-border text-foreground p-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-6 pb-2 border-b border-border">
+      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col bg-background border-border text-foreground p-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-6 pb-2 border-b border-border shrink-0">
           <DialogTitle className="text-xl tracking-[-0.3px]">CS Settings</DialogTitle>
           <DialogDescription className="text-muted-foreground">
             Full control over agent personality, tone, models, and knowledge base. Changes apply instantly to new generations.
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="general" className="w-full">
-          <TabsList className="mx-6 mt-4 w-fit bg-card border border-border">
+        {/* Scrollable tab area - header and footer stay fixed */}
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <Tabs defaultValue="general" className="flex flex-col flex-1 min-h-0">
+          <TabsList className="mx-6 mt-4 mb-2 w-fit bg-card border border-border shrink-0">
             <TabsTrigger value="general" className="gap-1.5"><Settings className="h-3.5 w-3.5" /> General</TabsTrigger>
             <TabsTrigger value="prompt" className="gap-1.5"><Bot className="h-3.5 w-3.5" /> Agent Prompt</TabsTrigger>
             <TabsTrigger value="tone" className="gap-1.5"><Settings className="h-3.5 w-3.5" /> Tone Rules</TabsTrigger>
             <TabsTrigger value="kb" className="gap-1.5"><Database className="h-3.5 w-3.5" /> Knowledge Base</TabsTrigger>
           </TabsList>
 
-          {/* 1. Agent System Prompt */}
-          <TabsContent value="prompt" className="px-6 pt-4 pb-6 space-y-4">
-            <div>
-              <Label className="text-xs uppercase tracking-widest text-muted-foreground">System Prompt</Label>
+          {/* Agent Prompt — now a first-class Prompt Composer (Fase 2) */}
+          <TabsContent value="prompt" className="px-6 pt-4 pb-6 space-y-4 flex-1 min-h-0 overflow-y-auto">
+            {/* HERO: Live Effective Prompt — the star of the show. Prominent, calm, actionable. */}
+            <div className="glass rounded-xl border border-border p-4 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="rounded-md bg-primary/10 p-1.5 text-primary">
+                    <Bot className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-semibold tracking-[-0.2px] text-base flex items-center gap-2">
+                      Live Effective Prompt
+                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    </div>
+                    <div className="text-[11px] text-muted-foreground -mt-0.5">
+                      Exactly what the model will receive on the next generation
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 text-[11px] tabular-nums text-muted-foreground shrink-0">
+                  <span>≈ {estimateTokens(effectivePrompt)} tokens</span>
+                  <span className="text-muted-foreground/40">•</span>
+                  <span>{effectivePrompt.length} chars</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs gap-1.5 ml-1 border border-border hover:border-primary/40"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(effectivePrompt);
+                        toast.success("Effective prompt copied");
+                      } catch {
+                        toast.error("Could not copy");
+                      }
+                    }}
+                  >
+                    <Copy className="h-3.5 w-3.5" /> Copy
+                  </Button>
+                </div>
+              </div>
+
+              <pre className="text-[12px] leading-relaxed font-mono bg-background/60 border border-border rounded-lg p-4 max-h-[260px] overflow-auto whitespace-pre-wrap text-foreground/90 ring-1 ring-inset ring-white/5">
+{effectivePrompt}
+              </pre>
+
+              <div className="flex items-center justify-between text-[10px]">
+                <div className="text-muted-foreground/70">
+                  Includes your base prompt + active Tone Rules + Extra Instructions.
+                  <span className="ml-1 text-emerald-400/80">+ RAG context</span> (when enabled) is appended at generation time.
+                </div>
+                <div className="text-muted-foreground/50">Live • updates as you edit anywhere in Settings</div>
+              </div>
+            </div>
+
+            {/* Base personality editor — supporting role now that the composed result is hero */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs uppercase tracking-widest text-muted-foreground">Base System Prompt</Label>
+                <span className="text-[10px] text-muted-foreground tabular-nums">{local.systemPrompt.length} chars</span>
+              </div>
               <Textarea
                 value={local.systemPrompt}
                 onChange={(e) => setAndPersist({ systemPrompt: e.target.value })}
-                className="mt-2 min-h-[280px] font-mono text-sm leading-relaxed bg-card border-border"
+                className="min-h-[160px] font-mono text-sm leading-relaxed bg-card border-border"
+                placeholder="Your core personality instructions..."
               />
-              <div className="flex justify-between mt-2">
+              <div className="flex items-center justify-between">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setAndPersist({ systemPrompt: DEFAULT_SYSTEM_PROMPT })}
+                  className="h-7 text-xs text-muted-foreground hover:text-foreground px-2"
                 >
                   Restore default prompt
                 </Button>
-                <span className="text-xs text-muted-foreground self-center">{local.systemPrompt.length} chars</span>
+                <span className="text-[10px] text-muted-foreground/70">Tone rules &amp; extra instructions (Tone tab) are merged on top of this</span>
               </div>
-            </div>
-            <p className="text-xs text-muted-foreground/70">This is the core personality. Edit carefully — it defines every reply.</p>
-
-            {/* Live effective prompt preview — recomputes instantly as you edit base + tone rules + extra instructions (from Tone tab) */}
-            <div className="pt-4 border-t border-border/60">
-              <div className="flex items-center justify-between mb-1.5">
-                <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Live effective prompt preview</Label>
-                <span className="text-[10px] text-muted-foreground/60">updates as you type • includes Tone + Extra</span>
-              </div>
-              <pre className="text-[11px] leading-snug font-mono bg-background border border-border rounded-lg p-3 max-h-44 overflow-auto whitespace-pre-wrap text-foreground/80">
-{buildSystemPrompt(local.systemPrompt, local.toneRules, local.extraInstructions)}
-              </pre>
-              <p className="mt-1 text-[10px] text-muted-foreground/50">This is exactly what gets sent to the model on the next generation (plus any RAG context).</p>
             </div>
           </TabsContent>
 
           {/* 2. Grammar & Tone Rules */}
-          <TabsContent value="tone" className="px-6 pt-4 pb-6 space-y-6">
+          <TabsContent value="tone" className="px-6 pt-4 pb-6 space-y-6 flex-1 min-h-0 overflow-y-auto">
             <div className="grid grid-cols-2 gap-x-8 gap-y-6">
               <div className="space-y-2">
                 <Label>Response Style Preset</Label>
@@ -346,194 +425,171 @@ export function SettingsModal() {
           </TabsContent>
 
           {/* 4. General Usage Settings */}
-          <TabsContent value="general" className="px-6 pt-4 pb-6 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label>Default Model</Label>
-                <Input
-                  value={local.defaultModelId}
-                  onChange={(e) => setAndPersist({ defaultModelId: e.target.value })}
-                  placeholder="e.g. LLAMA_3_2_1B_INST_Q4_0 or /path/to/model.gguf"
-                  className="bg-card border-border font-mono text-sm"
-                />
-                <p className="text-[11px] text-muted-foreground">QVAC model ID, local path, or registry constant. Click a recommendation below, then Load to download (if needed) and cache it.</p>
+          <TabsContent value="general" className="px-6 pt-4 pb-6 space-y-6 flex-1 min-h-0 overflow-y-auto">
+            {/* Model section — main star (2x2 grid) */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>Model</Label>
+                {lastLoadedSpec && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-400">
+                    <Check className="h-3 w-3" /> {RECOMMENDED_LLM_MODELS.find((r) => r.id === lastLoadedSpec)?.label.split(" (")[0] || "Loaded"}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground -mt-1">Choose a recommended model or enter a custom registry ID / local GGUF path. Load downloads (if needed) and activates instantly for new generations.</p>
 
-                {/* Quick selects for recommended lightweight models (good at following our support tone prompt + RAG) */}
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {RECOMMENDED_LLM_MODELS.map((m) => {
-                    const guide = MODEL_GUIDE.find((g) => g.id === m.id);
-                    const short = m.label.split(" (")[0];
-                    const hint = guide ? guide.ramMac.split("–")[0].trim() : "";
-                    return (
-                      <Button
-                        key={m.id}
-                        size="sm"
-                        variant="outline"
-                        className="h-7 px-2.5 text-[11px] border-border hover:border-primary/40"
-                        onClick={() => setAndPersist({ defaultModelId: m.id })}
-                        title={m.label}
-                      >
-                        {short} {hint && <span className="text-muted-foreground/60 ml-0.5">· {hint}</span>}
-                      </Button>
-                    );
-                  })}
-                </div>
+              <RecommendedModels
+                selectedId={local.defaultModelId}
+                lastLoadedId={lastLoadedSpec}
+                loadingId={loadingTarget}
+                loadProgress={modelLoadProgress}
+                onSelect={(id) => setAndPersist({ defaultModelId: id })}
+                onLoad={(id) => loadModel(id)}
+                disableLoad={!!loadingTarget}
+              />
 
-                <div className="pt-1 flex items-center gap-2">
+              {/* Custom model path / advanced ID */}
+              <div className="pt-1 space-y-1.5">
+                <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Custom model</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={local.defaultModelId}
+                    onChange={(e) => setAndPersist({ defaultModelId: e.target.value })}
+                    placeholder="LLAMA_... or /path/to/model.gguf"
+                    className="bg-card border-border font-mono text-sm h-8"
+                  />
                   <Button
                     size="sm"
-                    variant="ghost"
-                    onClick={() => setIsGuideOpen(true)}
-                    className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground"
+                    variant="outline"
+                    className="h-8 text-xs shrink-0 border-border"
+                    onClick={() => loadModel(local.defaultModelId || DEFAULT_LLM_MODEL)}
+                    disabled={!!loadingTarget}
                   >
-                    <Info className="h-3.5 w-3.5" />
-                    Guía de modelos (Mac)
+                    Load
                   </Button>
                 </div>
+                <p className="text-[10px] text-muted-foreground/70">Registry constant or absolute local GGUF path. The Load button above also works for custom.</p>
+              </div>
 
-                <div className="pt-1">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      onClick={async () => {
-                        const src = local.defaultModelId || DEFAULT_LLM_MODEL;
-                        setModelLoadProgress(null);
-                        try {
-                          // loadLocalModel returns the *runtime handle* (short hash), required for stream/complete calls.
-                          // settings.defaultModelId keeps the src spec (registry const) for future loads.
-                          const handle = await loadLocalModel({
-                            modelSrc: src,
-                            modelType: "llamacpp-completion",
-                            modelConfig: { ctx_size: 4096 },
-                            onProgress: (p) => setModelLoadProgress(p),
-                          });
-                          setModelId(handle);
-                          // Persist the chosen src spec so it becomes the remembered default for next app start.
-                          await updateSettings({ defaultModelId: src });
-                          toast.success("Model ready", { description: src });
-                        } catch (e: any) {
-                          toast.error("Load failed", { description: e?.message || "See console" });
-                        } finally {
-                          setModelLoadProgress(null);
-                        }
-                      }}
-                      disabled={!!modelLoadProgress}
-                      className="h-7 text-xs"
-                    >
-                      {modelLoadProgress ? `Loading…` : "Load / Download this model"}
-                    </Button>
-                    {modelLoadProgress && (
-                      <span className="text-[10px] text-primary tabular-nums min-w-[3ch]">{Math.round(modelLoadProgress.percentage || 0)}%</span>
-                    )}
+              <div className="pt-0.5">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setIsGuideOpen(true)}
+                  className="h-7 text-xs gap-1.5 text-muted-foreground hover:text-foreground px-0"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                  View full Mac model guide &amp; RAM guidance
+                </Button>
+              </div>
+
+              {/* Advanced model debug (power users; stable, see README) */}
+              <div className="pt-1">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    try {
+                      const list = await listCachedModels();
+                      setCachedModels(list);
+                    } catch (e: any) {
+                      setCachedModels({ files: [`Error: ${e?.message || e}`] });
+                    }
+                  }}
+                  className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
+                >
+                  Advanced: inspect cached models
+                </Button>
+                {cachedModels && (
+                  <div className="mt-1.5 p-2 bg-card border border-border rounded text-[10px] font-mono max-h-28 overflow-auto text-muted-foreground">
+                    <div>Dir: {cachedModels.modelsDir || 'n/a'}</div>
+                    <div>Files: {(cachedModels.files || []).length}</div>
                   </div>
+                )}
+              </div>
+            </div>
 
-                  {/* Visual progress bar for model download/load (premium feel) */}
-                  {modelLoadProgress && (
-                    <div className="mt-1.5 h-1.5 w-full bg-muted rounded overflow-hidden border border-border/50">
-                      <div
-                        className="h-full bg-primary transition-all"
-                        style={{ width: `${Math.max(2, Math.round(modelLoadProgress.percentage || 0))}%` }}
-                      />
+            {/* Generation + Behavior — rebalanced below the model grid for harmony */}
+            <div className="pt-4 border-t border-border space-y-5">
+              {/* Sliders row */}
+              <div>
+                <Label className="text-xs uppercase tracking-widest text-muted-foreground mb-2 block">Generation settings</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label>Temperature — {local.temperature.toFixed(1)}</Label>
+                    <Slider
+                      value={[local.temperature]}
+                      onValueChange={([v]) => setAndPersist({ temperature: v })}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                    />
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                      <div>Precise / deterministic</div>
+                      <div>Creative</div>
                     </div>
-                  )}
-                </div>
+                  </div>
 
-                {/* Advanced model debug (hidden in normal use; stable pipeline, see README for manual verification) */}
-                <div className="pt-1">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={async () => {
-                      try {
-                        const list = await listCachedModels();
-                        setCachedModels(list);
-                        // Intentionally minimal: power users can inspect in console or expand this in future
-                      } catch (e: any) {
-                        setCachedModels({ files: [`Error: ${e?.message || e}`] });
-                      }
-                    }}
-                    className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
-                  >
-                    Advanced: inspect cached models
-                  </Button>
-                  {cachedModels && (
-                    <div className="mt-1.5 p-2 bg-card border border-border rounded text-[10px] font-mono max-h-32 overflow-auto text-muted-foreground">
-                      <div>Dir: {cachedModels.modelsDir || 'n/a'}</div>
-                      <div>Files: {(cachedModels.files || []).length}</div>
+                  <div className="space-y-2">
+                    <Label>Max tokens per reply — {local.maxTokens}</Label>
+                    <Slider
+                      value={[local.maxTokens]}
+                      onValueChange={([v]) => setAndPersist({ maxTokens: v })}
+                      min={256}
+                      max={4096}
+                      step={64}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Toggles in a clean 2x2 grid for visual harmony with the model cards */}
+              <div>
+                <Label className="text-xs uppercase tracking-widest text-muted-foreground mb-2 block">Behavior &amp; features</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="flex items-center justify-between rounded border border-border bg-card p-3">
+                    <div>
+                      <div className="text-sm">Auto-apply grammar check</div>
+                      <div className="text-xs text-muted-foreground">Run style pass on every generated reply</div>
                     </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Temperature — {local.temperature.toFixed(1)}</Label>
-                <Slider
-                  value={[local.temperature]}
-                  onValueChange={([v]) => setAndPersist({ temperature: v })}
-                  min={0}
-                  max={1}
-                  step={0.05}
-                />
-                <div className="flex justify-between text-[10px] text-muted-foreground">
-                  <div>Precise / deterministic</div>
-                  <div>Creative</div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Max tokens per reply — {local.maxTokens}</Label>
-                <Slider
-                  value={[local.maxTokens]}
-                  onValueChange={([v]) => setAndPersist({ maxTokens: v })}
-                  min={256}
-                  max={4096}
-                  step={64}
-                />
-              </div>
-
-              <div className="space-y-4 pt-1">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Auto-apply grammar check</Label>
-                    <p className="text-xs text-muted-foreground">Run style pass on every generated reply</p>
+                    <Switch
+                      checked={local.autoApplyGrammarCheck}
+                      onCheckedChange={(c) => setAndPersist({ autoApplyGrammarCheck: c })}
+                    />
                   </div>
-                  <Switch
-                    checked={local.autoApplyGrammarCheck}
-                    onCheckedChange={(c) => setAndPersist({ autoApplyGrammarCheck: c })}
-                  />
-                </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Show sources &amp; confidence</Label>
-                    <p className="text-xs text-muted-foreground">Display RAG citations when available</p>
+                  <div className="flex items-center justify-between rounded border border-border bg-card p-3">
+                    <div>
+                      <div className="text-sm">Show sources &amp; confidence</div>
+                      <div className="text-xs text-muted-foreground">Display RAG citations when available</div>
+                    </div>
+                    <Switch
+                      checked={local.showConfidenceAndSources}
+                      onCheckedChange={(c) => setAndPersist({ showConfidenceAndSources: c })}
+                    />
                   </div>
-                  <Switch
-                    checked={local.showConfidenceAndSources}
-                    onCheckedChange={(c) => setAndPersist({ showConfidenceAndSources: c })}
-                  />
-                </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Enable RAG</Label>
-                    <p className="text-xs text-muted-foreground">Use knowledge base in agent responses</p>
+                  <div className="flex items-center justify-between rounded border border-border bg-card p-3">
+                    <div>
+                      <div className="text-sm">Enable RAG</div>
+                      <div className="text-xs text-muted-foreground">Use knowledge base in agent responses</div>
+                    </div>
+                    <Switch
+                      checked={local.ragEnabled}
+                      onCheckedChange={(c) => setAndPersist({ ragEnabled: c })}
+                    />
                   </div>
-                  <Switch
-                    checked={local.ragEnabled}
-                    onCheckedChange={(c) => setAndPersist({ ragEnabled: c })}
-                  />
-                </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Show usage stats in chat</Label>
-                    <p className="text-xs text-muted-foreground">Tokens, speed and context size under replies</p>
+                  <div className="flex items-center justify-between rounded border border-border bg-card p-3">
+                    <div>
+                      <div className="text-sm">Show usage stats in chat</div>
+                      <div className="text-xs text-muted-foreground">Tokens, speed and context size under replies</div>
+                    </div>
+                    <Switch
+                      checked={local.showUsageStats ?? true}
+                      onCheckedChange={(c) => setAndPersist({ showUsageStats: c })}
+                    />
                   </div>
-                  <Switch
-                    checked={local.showUsageStats ?? true}
-                    onCheckedChange={(c) => setAndPersist({ showUsageStats: c })}
-                  />
                 </div>
               </div>
             </div>
@@ -560,7 +616,7 @@ export function SettingsModal() {
           </TabsContent>
 
           {/* Knowledge Base */}
-          <TabsContent value="kb" className="px-6 pt-4 pb-6 space-y-5">
+          <TabsContent value="kb" className="px-6 pt-4 pb-6 space-y-5 flex-1 min-h-0 overflow-y-auto">
             <div>
               <Label>Local documents folder</Label>
               <div className="mt-1.5 flex gap-2">
@@ -605,14 +661,27 @@ export function SettingsModal() {
             </div>
           </TabsContent>
         </Tabs>
+        </div> {/* close the flex-1 scroll wrapper for tab content */}
 
-        <div className="flex items-center justify-between border-t border-border bg-card/60 px-6 py-4">
+        <div className="flex items-center justify-between border-t border-border px-6 py-4 bg-background/60 shrink-0">
           <div className="flex items-center gap-2">
             <Button variant="ghost" onClick={resetToDefaults} className="text-muted-foreground">
               Reset to defaults
             </Button>
             <Button variant="ghost" size="sm" onClick={exportSettings} className="text-muted-foreground">Export</Button>
             <Button variant="ghost" size="sm" onClick={importSettings} className="text-muted-foreground">Import</Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSettingsOpen(false);
+                // Small delay so the settings dialog closes before the wizard opens
+                setTimeout(() => setOnboardingOpen(true), 120);
+              }}
+              className="text-muted-foreground"
+            >
+              Replay tour
+            </Button>
           </div>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => setSettingsOpen(false)}>Close</Button>
@@ -624,7 +693,7 @@ export function SettingsModal() {
 
     {/* In-App Model Guide Dialog — Mac optimized */}
     <Dialog open={isGuideOpen} onOpenChange={setIsGuideOpen}>
-      <DialogContent className="max-w-3xl bg-background border-border text-foreground p-0 overflow-hidden">
+      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col bg-background border-border text-foreground p-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-2 border-b border-border">
           <DialogTitle className="text-xl tracking-[-0.3px]">Guía de Modelos — Optimizado para Mac</DialogTitle>
           <DialogDescription className="text-muted-foreground">
@@ -632,7 +701,7 @@ export function SettingsModal() {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 overflow-y-auto">
           {MODEL_GUIDE.map((model) => (
             <div
               key={model.id}
@@ -679,7 +748,7 @@ export function SettingsModal() {
           </div>
         </div>
 
-        <div className="flex justify-end border-t border-border bg-card/60 px-6 py-4">
+        <div className="flex justify-end border-t border-border px-6 py-4 bg-background/60">
           <Button variant="ghost" onClick={() => setIsGuideOpen(false)}>Cerrar</Button>
         </div>
       </DialogContent>

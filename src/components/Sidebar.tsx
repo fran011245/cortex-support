@@ -3,6 +3,7 @@ import { useAgentStore } from "@/stores/useAgentStore";
 import { Button } from "@/components/ui/button";
 import { Plus, MessageSquare, Settings, Trash2, Pencil } from "lucide-react";
 import { cn, isMac } from "@/lib/utils";
+import cortexLogo from "@/assets/cortex-logo.svg";
 
 export function Sidebar() {
   const {
@@ -59,11 +60,14 @@ export function Sidebar() {
         data-tauri-drag-region
       >
         <div className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded bg-[#3B82F6] flex items-center justify-center">
-            <span className="text-[13px] font-semibold text-white tracking-[-1px]">C</span>
-          </div>
+          {/* Brain logo with purple gradient (exact asset, lines tinted via internal gradient) */}
+          <img 
+            src={cortexLogo} 
+            alt="Cortex" 
+            className="h-7 w-7 shrink-0" 
+          />
           <div>
-            <div className="font-semibold tracking-[-0.3px] text-lg leading-none">Cortex</div>
+            <div className="font-[var(--font-brand)] font-semibold tracking-[-0.3px] text-lg leading-none">Cortex</div>
             <div className="text-[10px] text-muted-foreground -mt-0.5">Support Co-Pilot</div>
           </div>
         </div>

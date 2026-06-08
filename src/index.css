@@ -3,6 +3,8 @@
 /* Cortex — Premium dark glassmorphism theme (2026 SaaS / crypto-finance) */
 @theme inline {
   --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-brand: "Space Grotesk", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --color-brand: #A855F7; /* Purple from the brain logo icon - used for logo highlighting */
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
   /* Core palette - Deep navy finance aesthetic */

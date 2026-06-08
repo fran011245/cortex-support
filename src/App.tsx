@@ -2,13 +2,14 @@ import { useEffect } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { ChatInterface } from "@/components/ChatInterface";
 import { SettingsModal } from "@/components/SettingsModal";
+import { OnboardingWizard } from "@/components/OnboardingWizard";
 import { Toaster } from "@/components/ui/sonner";
 import { useAgentStore } from "@/stores/useAgentStore";
 import { initQVAC } from "@/lib/qvac";
 import { ToolsView } from "@/components/ToolsView";
 
 function App() {
-  const { init, isSettingsOpen } = useAgentStore();
+  const { init, isSettingsOpen, settings, isOnboardingOpen, setOnboardingOpen } = useAgentStore();
 
   useEffect(() => {
     // Bootstrap store (sessions + persisted settings)
@@ -51,6 +52,18 @@ function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [init, isSettingsOpen]);
 
+  // First-run wizard trigger (after settings are loaded)
+  // Only auto-open if the user has never completed onboarding
+  useEffect(() => {
+    if (settings && !settings.hasCompletedOnboarding && !isOnboardingOpen) {
+      // Small delay so the main UI paints first
+      const t = setTimeout(() => {
+        setOnboardingOpen(true);
+      }, 350);
+      return () => clearTimeout(t);
+    }
+  }, [settings, isOnboardingOpen, setOnboardingOpen]);
+
   return (
     <div
       className="flex h-screen w-screen overflow-hidden bg-[#0A0F1C] text-foreground antialiased"
@@ -66,6 +79,10 @@ function App() {
       </div>
 
       <SettingsModal />
+      <OnboardingWizard
+        open={isOnboardingOpen}
+        onOpenChange={setOnboardingOpen}
+      />
 
       <Toaster
         position="top-center"

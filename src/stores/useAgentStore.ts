@@ -48,6 +48,9 @@ interface AgentState {
   isSettingsOpen: boolean;
   activeTool: "chat" | "grammar" | "translate" | "templates" | null;
 
+  // First-run onboarding wizard
+  isOnboardingOpen: boolean;
+
   // Actions
   init: () => Promise<void>;
   newSession: () => void;
@@ -65,6 +68,10 @@ interface AgentState {
   updateSettings: (partial: Partial<CSSettings>) => Promise<void>;
   abortCurrent: () => void;
   clearCurrentChat: () => void;
+
+  // Onboarding wizard
+  setOnboardingOpen: (open: boolean) => void;
+  completeOnboarding: () => Promise<void>;
 }
 
 const createNewSession = (): ChatSession => ({
@@ -161,6 +168,9 @@ export const useAgentStore = create<AgentState>()(
       settings: null,
       isSettingsOpen: false,
       activeTool: "chat",
+
+      // Onboarding
+      isOnboardingOpen: false,
 
       init: async () => {
         const settings = await loadSettings();
@@ -305,6 +315,13 @@ export const useAgentStore = create<AgentState>()(
 
       setSettingsOpen: (open) => set({ isSettingsOpen: open }),
       setActiveTool: (tool) => set({ activeTool: tool }),
+
+      setOnboardingOpen: (open: boolean) => set({ isOnboardingOpen: open }),
+
+      completeOnboarding: async () => {
+        const next = await libUpdateSettings({ hasCompletedOnboarding: true });
+        set({ settings: next, isOnboardingOpen: false });
+      },
 
       updateSettings: async (partial) => {
         const next = await libUpdateSettings(partial);

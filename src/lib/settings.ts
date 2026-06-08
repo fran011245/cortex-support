@@ -50,6 +50,9 @@ export interface CSSettings {
   // UI preference (backlog item from usage stats polish)
   showUsageStats?: boolean;
 
+  // Onboarding / first-run wizard completion flag
+  hasCompletedOnboarding?: boolean;
+
   // 5. Knowledge Base
   knowledgeBaseLastIndexed?: string; // ISO date
   knowledgeBaseDocCount?: number;
@@ -91,6 +94,7 @@ export const DEFAULT_SETTINGS: CSSettings = {
   knowledgeBaseLastIndexed: undefined,
   knowledgeBaseDocCount: 0,
   showUsageStats: true,
+  hasCompletedOnboarding: false,
 };
 
 let store: Store | null = null;
