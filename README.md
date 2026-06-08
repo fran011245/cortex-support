@@ -6,6 +6,26 @@
 
 Everything runs **100% locally** using the **@qvac/sdk** (Tether's local AI engine). Zero cloud dependencies. Maximum privacy. Your tickets and internal knowledge never leave the machine.
 
+This project is open source. We believe great support tools should be transparent, customizable, and community-driven. Contributions, feedback, and forks are welcome!
+
+## Why Open Source Cortex?
+
+Support work is high-stakes, high-context, and deeply human. The tools agents use should reflect that.
+
+We open-sourced Cortex because:
+
+- **Transparency & Trust** — When handling sensitive customer issues (especially in finance, crypto, or enterprise), teams need to be able to audit exactly what the AI is doing and what data it sees. 100% local + visible prompts (the Live Effective Prompt) is table stakes.
+- **Customization Without Lock-in** — Every support team has its own voice, policies, internal runbooks, and edge cases. Cortex lets teams evolve the agent's personality and knowledge entirely through Settings — no code changes required. Open source means you can always fork, extend, or self-host if your needs change.
+- **Better Tools Through Community** — Local AI for professional use is still early. By sharing the patterns (Tauri + local LLM orchestration, thoughtful RAG UX, Mac-optimized model guidance, calm and premium interface), we hope to raise the bar for everyone building in this space.
+- **Respect for the Craft** — Support agents are experts. Cortex is designed to amplify their expertise, not replace their judgment. Open source aligns with that respect — the project belongs to the people who use it every day.
+
+By making Cortex open source we hope more teams can:
+- Run a private, fully-controlled co-pilot internally
+- Contribute improvements that benefit the whole community (new tools, better onboarding, refined tone systems, etc.)
+- Learn from and build upon a real-world example of beautiful, responsible local AI UX
+
+We’re not trying to build the next big AI company. We’re trying to build a tool that makes excellent support work a little easier, clearer, and more consistent — and we believe the best way to do that is together.
+
 ---
 
 ## ✨ What Cortex Does for Support Teams
@@ -74,36 +94,48 @@ The `.dmg` is ready for distribution (codesign/notarize for wider release if des
 
 ## 🖼️ Screenshots
 
-*(Capture these from the running app for your demo/hackathon submission. Use the built `Cortex.app` for the final polished look.)*
+*(Add high-quality screenshots from the running `Cortex.app` — the polished dark theme with the custom brain logo looks great.)*
+
+**Sidebar & Branding**
+- Custom purple brain/neural network logo (the official Cortex icon)
+- "Cortex" rendered in Space Grotesk for strong brand presence
+- "Support Co-Pilot" in Inter for clean readability
+- Glassmorphism design, deep navy theme
 
 **Main Chat View**
 - Deep navy background (#0A0F1C)
-- Glassmorphism sidebar with chat history + quick tools
+- Glassmorphism sidebar with chat history + tools
 - Clean composer with live streaming responses
-- "Copy" and "Use as Response" buttons on every assistant message
+- "Copy" and "Use as Response" buttons
 - Sources cited when RAG is used
+- Minimal usage stats (tokens, speed, context)
 
-**Sidebar Tools (Grammar & Style, Smart Translate, Response Templates)**
-- Context-aware quick actions that feed the same agent brain
+**First-Run Experience**
+- Onboarding Wizard that guides new users through:
+  - Model selection (beautiful 2×2 grid of recommended Mac-optimized models with RAM/performance info)
+  - Knowledge Base setup (RAG folder + one-click index)
+  - Live Effective Prompt transparency
+  - Key behavior toggles
+- Skippable at any step, re-playable from Settings
 
-**Settings Modal (the heart of the product)**
+**Settings Modal (highly polished)**
 - Tabs: General | Agent Prompt | Tone Rules | Knowledge Base
-- Large editable system prompt (pre-filled with excellent professional support tone)
-- Structured tone controls + presets (Professional / Concise / Detailed / Empathetic)
-- Temperature, max tokens, model selection, RAG toggle
-- Folder picker + "Rebuild Knowledge Base" button
-- Export / Import settings as JSON
+- **General tab**: 2×2 recommended model cards (with load progress, "Loaded"/"Selected" states), custom model input, temperature + max tokens side-by-side, behavior toggles in a clean 2×2 grid
+- **Agent Prompt tab**: Large system prompt editor + prominent "Live Effective Prompt" hero card (shows exactly what the model receives, with live token estimate + copy button)
+- Tone Rules with presets + fine-grained controls
+- Knowledge Base: folder picker, rebuild button, status, and privacy note
+- Export / Import full agent configuration as JSON
 
 **RAG in Action**
-- Point to a folder of PDFs/Markdown
-- Rebuild embeds everything locally
-- Agent automatically pulls relevant chunks and cites sources
+- Point to any local folder of .md / .txt / .pdf (text layer)
+- Fully local embeddings via QVAC
+- Agent pulls relevant context + cites sources in replies
 
 **Production Build Artifacts**
-- `Cortex_0.1.0_aarch64.dmg` (5.2 MB)
+- `Cortex_0.1.0_aarch64.dmg`
 - `Cortex.app`
 
-*(Add high-quality screenshots here — dark theme with electric blue accents looks premium. The production .app gives the cleanest UI.)*
+*(Recommended: capture clean screenshots showing the new brain logo, the 2×2 model grid, the Live Effective Prompt card, and the first-run wizard.)*
 
 ---
 
@@ -111,7 +143,18 @@ The `.dmg` is ready for distribution (codesign/notarize for wider release if des
 
 All customization lives in **Settings** (⌘/, or gear icon). Changes apply instantly to new generations.
 
-### 1. Agent System Prompt
+**New users**: On first launch you will be greeted by a friendly **Onboarding Wizard** that walks you through the most important setup steps (model selection with the beautiful 2×2 grid, knowledge base / RAG folder, seeing your live effective prompt, and key toggles). The wizard is skippable and can be replayed anytime from Settings.
+
+### 1. Model Selection (now in a premium 2×2 grid)
+In **Settings → General** the recommended models are presented as elegant cards showing:
+- Name + quantization + approximate RAM on Mac
+- "Best for" description
+- Speed vs Quality notes
+- Live "Loaded" / "Selected" states + integrated download progress
+
+Click a card to select, then "Load / Download". Custom GGUF paths or other registry IDs are supported in the text field below.
+
+### 2. Agent System Prompt
 Large textarea. The full "personality" of Cortex. Pre-filled with a strong default that captures:
 - Professional, direct, pragmatic voice
 - Security & compliance awareness
@@ -120,56 +163,57 @@ Large textarea. The full "personality" of Cortex. Pre-filled with a strong defau
 
 Edit freely. Restore default with one click.
 
-### 2. Tone Rules & Style Presets
+### 3. Live Effective Prompt (the transparency hero)
+In the **Agent Prompt** tab you will see a prominent "Live Effective Prompt" card that shows *exactly* what will be sent to the model (base prompt + active Tone Rules + your Extra Instructions), with live token estimate and a one-click Copy button.
+
+This is one of the most powerful and delightful parts of Cortex — you always know what the agent "thinks".
+
+### 4. Tone Rules & Style Presets
 - Choose preset: Professional (default), Concise, Detailed, Empathetic
 - Fine-grained toggles: full sentences, no emojis, direct-but-polite, prioritize security warnings
 - Max reply length guidance (slider)
 
-### 3. Extra Instructions
+### 5. Extra Instructions
 Free-form text appended to every system prompt. Examples:
 - "Always mention the ticket ID at the top."
 - "For corporate clients, use last name only."
 - "Never promise specific timelines."
 
-### 4. Model & Generation Settings
-- Default model ID (use the registry constants via the chips, or paste a local GGUF path)
+### 6. Generation Settings
 - Temperature slider (0.0 = deterministic / 1.0 = creative)
 - Max tokens
 
-### 5. RAG / Knowledge Base
+These now live in a clean side-by-side layout under "Generation settings".
+
+### 7. RAG / Knowledge Base
 - Pick a folder containing your internal docs (.md, .txt, .pdf text layer)
 - Toggle "Enable RAG"
 - "Rebuild Knowledge Base" button (uses QVAC embeddings)
 - Sources automatically injected into prompts and cited in replies
+- Status shows last indexed date + document count
 
-### 6. Export / Import
+### 8. Behavior Toggles
+The most useful toggles (Auto-apply grammar, Show sources & confidence, Enable RAG, Show usage stats) are presented in a tidy 2×2 card grid for quick scanning.
+
+### 9. Export / Import
 Export your entire tuned agent (prompt + rules + model prefs + RAG path) as JSON. Share across the team or version-control it.
 
 **Pro tip**: The Settings *are* the product. A great support team can evolve the agent's voice and knowledge base over time without ever touching the codebase.
 
 ### Recommended Default Models (Lightweight + Task-Aligned)
-We ship with `LLAMA_3_2_1B_INST_Q4_0` pre-configured as the default (in `DEFAULT_SETTINGS`). Weights are **never** bundled in the .dmg/.app — they are downloaded on first use (or first chat send) via the QVAC registry into your local `~/.qvac/models` cache. This keeps the distributable tiny.
+We ship with `LLAMA_3_2_1B_INST_Q4_0` pre-configured as the default. Weights are **never** bundled — they are downloaded on first use via the QVAC registry into your local `~/.qvac/models` cache.
 
-In **Settings → General** you will find:
+The 2×2 grid in Settings makes choosing easy, with Mac-specific RAM and performance guidance from the in-app model guide.
 
-- Quick-select chips for the three recommended lightweight instruction-tuned models.
-- A text field where you can paste any registry constant or a local path.
-- The **"Load / Download this model"** button with live progress percentage while fetching.
-- A **"Debug: List cached models"** helper that shows the exact contents of `~/.qvac/models` (very useful after the first download).
-
-**Use the exact registry constant names** (the chips already do this):
+**Use the exact registry constant names** (shown on the cards):
 
 - `LLAMA_3_2_1B_INST_Q4_0` (primary — ultra light, fastest, great for daily support work)
 - `QWEN3_1_7B_INST_Q4` (excellent instruction following)
 - `QWEN3_4B_INST_Q4_K_M` (best quality/weight trade-off of the three)
 
-For RAG embeddings (used automatically when you enable RAG + rebuild a knowledge base): `EMBEDDINGGEMMA_300M_Q4_0`
+For RAG embeddings: `EMBEDDINGGEMMA_300M_Q4_0`
 
-After selecting a model and clicking Load, the choice is persisted. The chat header also has a "Load recommended model" / "Reload model" button, and sending the first message in a new session will auto-trigger the load (with progress feedback) if nothing is ready yet.
-
-**Important**: Always use the constant names shown above (or via the chips), **not** local filenames like `Llama-3.2-1B-Instruct-Q4_0.gguf`. The latter will result in `MODEL_NOT_FOUND` on first download even if the file later appears in your cache. The Debug list button shows you the real on-disk names after a successful registry fetch.
-
-The whole download + load pipeline (including progress reporting and name resolution) is now stable and reliable.
+The download + load pipeline (with live progress and correct name resolution) is stable and reliable. The chat header and empty state also provide easy "Load model" access.
 
 ---
 
@@ -270,67 +314,54 @@ Internal tooling for professional support teams (to be defined by the team).
 
 ---
 
-## 🌐 Landing Page + Downloadable Sync (cortesupport.lovable.app)
+## 🌐 Website & Distribution
 
-The current landing (built on Lovable) needs a prominent "Download for macOS" (or "Get Cortex") button / link that always points to the latest .dmg.
+A public website / landing page can point to GitHub Releases for the latest `.dmg`.
 
-**Current state (as of this rename)**: We have not edited the external Lovable site yet — this is the next coordination step with you.
+**Recommended release flow** (once you're ready for public distribution):
+1. `pnpm tauri build`
+2. Create a GitHub Release with the `.dmg` (and updater artifacts if using the auto-updater).
+3. Update your website's download button to point to the latest release asset or release page.
 
-**Recommended flow**:
-1. Build: `pnpm tauri build` (produces `src-tauri/target/release/bundle/dmg/Cortex_0.1.0_aarch64.dmg` and signatures if updater enabled).
-2. Release on GH:
-   - Tag + push: `git tag v0.1.0 && git push origin v0.1.0`
-   - Go to GitHub → Releases → "Draft a new release" from the tag.
-   - Upload the .dmg (and .sig / latest.json / .tar.gz if generated) as assets.
-   - Publish (can be private release visible to your team).
-3. Sync to landing:
-   - **Easiest (manual)**: In the Lovable editor, edit the download button's link to the direct GH asset URL (or the release page). Update any "vX.Y.Z" text. Takes <1min.
-   - **Better (auto-sync friendly)**: Host a tiny public `manifest.json` (on your VPS under easy static route, or a public gist, or GH Pages branch even for private repo, or even a free JSON bin). Landing (if it allows an HTML/JS embed or "dynamic link" component) can `fetch` the manifest and set `download.href = data.dmgUrl; versionText = data.version`.
-     Example manifest (update on every release):
-     ```json
-     {
-       "version": "0.1.0",
-       "dmgUrl": "https://github.com/fran011245/cortex-support/releases/download/v0.1.0/Cortex_0.1.0_aarch64.dmg",
-       "notes": "Renamed to Cortex + optional auto-updater support. Stable QVAC local model loading (registry constants + progress).",
-       "sizeMB": 5
-     }
-     ```
-4. VPS option (you have one): Add a simple static file server or just drop the .dmg + manifest in a volume mounted to a public path via Traefik. Then landing always points to `https://<your-vps>/download/cortex-latest.dmg` (you symlink or copy on deploy).
+We keep the GitHub release as the single source of truth. A small `manifest.json` (hosted on GitHub Pages, a gist, or your own static hosting) can be used by the website to dynamically show version + direct download link.
 
-**What I suggest we do next together**:
-- You show me the current structure of the Lovable page (or the specific section with the download CTA, any custom code/embed area).
-- Decide: manual updates for v0.1 / hackathon, or invest 20min in a manifest + fetch (if Lovable allows) or VPS mirror.
-- After next build + GH release, we update the landing link + version badge.
-
-This keeps the "single source of truth" as the GH release (or your VPS), and the landing just references it.
+See the "Distribution & Auto-Updates" section above for more details on optional auto-updater setup.
 
 ---
 
-## 📦 Hackathon / Deliverables
+## 🤝 Contributing
 
-- ✅ Excellent README (this file) with setup, customization guide, architecture, and value explanation
-- ✅ Dedicated [DEMO_VIDEO_SCRIPT.md](DEMO_VIDEO_SCRIPT.md)
-- ✅ Production `.dmg` and `.app` (see build artifacts above)
-- ✅ Full source + all phases implemented (0–7)
-- ✅ **Stable local model loading pipeline** (QVAC registry downloads, name resolution, progress, caching, RAG embeddings, streaming completions) — ready for production use by support agents. UI/UX improvements are the focus of the next development cycle.
+We welcome contributions! Whether it's:
 
-Built with ❤️ and a deep respect for professional support work.
+- Bug reports and feature requests (open an issue)
+- UI/UX polish and new agent tools
+- Improvements to the onboarding wizard or settings experience
+- Documentation, translations, or example knowledge base folders
+- Better error handling or performance in the local AI pipeline
+
+Please open an issue first for bigger changes so we can discuss the approach.
+
+---
+
+## 📄 License
+
+This project is open source. See `LICENSE` (we recommend the MIT License for maximum openness and adoption by support teams and companies).
+
+---
+
+## 🔜 Roadmap & Future Work
+
+Core local AI functionality is stable (model registry downloads with progress, correct constant resolution, RAG, streaming, caching).
+
+Current focus areas:
+- Continued UI/UX refinement (the "suprema" settings experience and first-run wizard are recent highlights)
+- Additional high-value agent tools
+- Even better RAG UX and folder management
+- Cross-platform support (currently optimized for macOS / Apple Silicon)
+- Community contributions welcome!
+
+The `DEBUG_MODEL_LOADING.md` file contains historical debugging notes for the QVAC integration (useful reference).
+
+Built with ❤️ and deep respect for professional support work.
 
 **Cortex** — because even the best agents deserve a co-pilot that never forgets the tone.
-
----
-
-## 🔜 What's Next (New Session)
-
-Core local AI functionality (model download from QVAC registry using the proper constant names, live progress, auto-resolution in the host, caching, streaming completions, and RAG) is now stable and reliable.
-
-The focus of the **next development cycle** will be UI/UX improvements:
-- Polish, responsiveness, better visual feedback
-- Improved RAG folder management and rebuild UX
-- More agent tools / templates
-- Better error states and first-run experience
-- General refinement of the chat and settings interfaces
-
-The `DEBUG_MODEL_LOADING.md` file in the repo root contains the full historical debugging notes for the AI integration (useful reference but no longer required for day-to-day work).
-
-Happy to start the new session whenever you're ready!
