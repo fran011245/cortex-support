@@ -28,7 +28,7 @@ We’re not trying to build the next big AI company. We’re trying to build a t
 
 ---
 
-## ✨ What Cortex Does for Support Teams
+## What Cortex Does for Support Teams
 
 Customer support agents (especially in crypto and financial services) handle sophisticated users and corporate accounts. Responses must be:
 
@@ -48,7 +48,7 @@ Cortex acts as an always-available co-pilot that:
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - macOS (Apple Silicon recommended for speed)
@@ -92,7 +92,7 @@ The `.dmg` is ready for distribution (codesign/notarize for wider release if des
 
 ---
 
-## 🖼️ Screenshots
+## Screenshots
 
 *(Add high-quality screenshots from the running `Cortex.app` — the polished dark theme with the custom brain logo looks great.)*
 
@@ -139,7 +139,7 @@ The `.dmg` is ready for distribution (codesign/notarize for wider release if des
 
 ---
 
-## 🛠️ How to Customize the Agent (No Code Required)
+## How to Customize the Agent (No Code Required)
 
 All customization lives in **Settings** (⌘/, or gear icon). Changes apply instantly to new generations.
 
@@ -217,7 +217,7 @@ The download + load pipeline (with live progress and correct name resolution) is
 
 ---
 
-## 🎬 Demo Video Script
+## Demo Video Script
 
 See the detailed, ready-to-record script in [DEMO_VIDEO_SCRIPT.md](DEMO_VIDEO_SCRIPT.md) (2:30–3:00 target length, with timing, narration, b-roll order, and recording tips).
 
@@ -225,7 +225,7 @@ It is optimized for hackathon / internal leadership demos and emphasizes real va
 
 ---
 
-## 🏆 How Cortex Helps Support Teams
+## How Cortex Helps Support Teams
 
 - **Speed**: Agents get excellent first drafts in seconds instead of minutes.
 - **Consistency**: Every reply matches the exact tone and quality bar, even on night shifts or for new hires.
@@ -239,7 +239,7 @@ Cortex doesn't replace agents — it makes great agents dramatically more effect
 
 ---
 
-## 🏗️ Architecture & Tech
+## Architecture & Tech
 
 - **Desktop**: Tauri 2 (Rust backend + React frontend) → native macOS .app/.dmg with tiny footprint.
 - **Frontend**: React 19 + TypeScript + Vite + Tailwind v4 + shadcn/ui + Zustand.
@@ -261,7 +261,7 @@ Next work will focus on UI/UX polish and additional agent features. The core QVA
 
 ---
 
-## 📦 Distribution & Auto-Updates (optional)
+## Distribution & Auto-Updates (optional)
 
 - Development: `pnpm tauri dev`
 - Production: `pnpm tauri build` → ready-to-distribute .dmg (now named `Cortex_0.1.0_....dmg` and `Cortex.app`)
@@ -281,7 +281,7 @@ See also "Landing page + downloadable sync" below.
 
 ---
 
-## 🛠️ Development
+## Development
 
 ```bash
 cd cortex-support
@@ -314,7 +314,7 @@ Internal tooling for professional support teams (to be defined by the team).
 
 ---
 
-## 🌐 Website & Distribution
+## Website & Distribution
 
 A public website / landing page can point to GitHub Releases for the latest `.dmg`.
 
@@ -329,7 +329,7 @@ See the "Distribution & Auto-Updates" section above for more details on optional
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Whether it's:
 
@@ -349,7 +349,7 @@ This project is open source. See `LICENSE` (we recommend the MIT License for max
 
 ---
 
-## 🔜 Roadmap & Future Work
+## Roadmap & Future Work
 
 Core local AI functionality is stable (model registry downloads with progress, correct constant resolution, RAG, streaming, caching).
 
@@ -362,6 +362,6 @@ Current focus areas:
 
 The `DEBUG_MODEL_LOADING.md` file contains historical debugging notes for the QVAC integration (useful reference).
 
-Built with ❤️ and deep respect for professional support work.
+Built with respect for professional support work.
 
 **Cortex** — because even the best agents deserve a co-pilot that never forgets the tone.
