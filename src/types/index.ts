@@ -6,6 +6,7 @@ export type { CSSettings } from "@/lib/settings";
 export type { ToneRules } from "@/lib/prompts";
 export type { ChatMessage, QVACCompletionResult } from "@/lib/qvac";
 export type { Message, ChatSession } from "@/stores/useAgentStore";
+export type { CustomResponseTemplate } from "@/lib/responseTemplates";
 
 export interface ToolAction {
   id: string;
