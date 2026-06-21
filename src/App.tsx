@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/Sidebar";
+import { LoadingSplash } from "@/components/LoadingSplash";
 import { ChatInterface } from "@/components/ChatInterface";
 import { SettingsModal } from "@/components/SettingsModal";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
@@ -9,6 +10,7 @@ import { initQVAC } from "@/lib/qvac";
 import { ToolsView } from "@/components/ToolsView";
 
 function App() {
+  const [showSplash, setShowSplash] = useState(true);
   const { init, isSettingsOpen, settings, isOnboardingOpen, setOnboardingOpen } = useAgentStore();
 
   useEffect(() => {
@@ -65,10 +67,12 @@ function App() {
   }, [settings, isOnboardingOpen, setOnboardingOpen]);
 
   return (
-    <div
-      className="flex h-screen w-screen overflow-hidden bg-[#0A0F1C] text-foreground antialiased"
-      data-tauri-drag-region
-    >
+    <>
+      {showSplash && <LoadingSplash onDone={() => setShowSplash(false)} />}
+      <div
+        className="flex h-screen w-screen overflow-hidden bg-[#0A0F1C] text-foreground antialiased"
+        data-tauri-drag-region
+      >
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         {useAgentStore((s) => s.activeTool) === "chat" ? (
@@ -96,6 +100,7 @@ function App() {
         }}
       />
     </div>
+    </>
   );
 }
 
