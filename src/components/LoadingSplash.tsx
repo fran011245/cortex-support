@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import cortexLogo from "@/assets/cortex-logo.svg";
 import { cn } from "@/lib/utils";
 
@@ -8,15 +8,16 @@ interface LoadingSplashProps {
 
 export function LoadingSplash({ onDone }: LoadingSplashProps) {
   const [fading, setFading] = useState(false);
+  const onDoneRef = useRef(onDone);
 
   useEffect(() => {
     const fadeTimer = setTimeout(() => setFading(true), 1700);
-    const doneTimer = setTimeout(() => onDone(), 2100);
+    const doneTimer = setTimeout(() => onDoneRef.current(), 2100);
     return () => {
       clearTimeout(fadeTimer);
       clearTimeout(doneTimer);
     };
-  }, [onDone]);
+  }, []); // intentionally empty — timers should run exactly once on mount
 
   return (
     <div
