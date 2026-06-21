@@ -59,9 +59,14 @@ jobs:
           releaseBody: |
             ## Download
 
-            | Platform | File |
-            |---|---|
-            | macOS Apple Silicon | `Cortex_*_aarch64.dmg` |
+            **Direct download (recommended):**
+            [Cortex.dmg](https://github.com/fran011245/cortex-support/releases/latest/download/Cortex.dmg)
+
+            | Platform              | File                        |
+            |-----------------------|-----------------------------|
+            | macOS Apple Silicon   | `Cortex_*_aarch64.dmg`      |
+
+            Or go to the [Releases page](https://github.com/fran011245/cortex-support/releases/latest).
 
             ## Requirements
 
@@ -75,3 +80,19 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: --target aarch64-apple-darwin
+
+      # Upload a stable filename so the landing page can always use
+      # https://github.com/fran011245/cortex-support/releases/latest/download/Cortex.dmg
+      - name: Upload stable Cortex.dmg (for landing page direct download)
+        run: |
+          DMG=$(find target -name "Cortex_*_aarch64.dmg" | head -1)
+          if [ -f "$DMG" ]; then
+            cp "$DMG" Cortex.dmg
+            gh release upload ${{ github.ref_name }} Cortex.dmg --clobber
+            echo "✅ Uploaded Cortex.dmg for direct download"
+          else
+            echo "❌ DMG not found for stable upload"
+            exit 1
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
