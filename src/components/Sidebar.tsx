@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useAgentStore } from "@/stores/useAgentStore";
 import { Button } from "@/components/ui/button";
-import { Plus, MessageSquare, Settings, Trash2, Pencil } from "lucide-react";
+import { Plus, MessageSquare, Settings, Trash2, Pencil, Bot, Wand2, Languages, FileText } from "lucide-react";
 import { cn, isMac } from "@/lib/utils";
 import cortexLogo from "@/assets/cortex-logo.svg";
 
@@ -173,26 +173,27 @@ export function Sidebar() {
           Tools
         </div>
         {[
-          { key: "chat" as const, label: "Chat Agent" },
-          { key: "grammar" as const, label: "Grammar & Style" },
-          { key: "translate" as const, label: "Smart Translate" },
-          { key: "templates" as const, label: "Response Templates" },
+          { key: "chat" as const, label: "Chat Agent", icon: Bot },
+          { key: "grammar" as const, label: "Grammar & Style", icon: Wand2 },
+          { key: "translate" as const, label: "Smart Translate", icon: Languages },
+          { key: "templates" as const, label: "Response Templates", icon: FileText },
         ].map((t) => (
           <button
             key={t.key}
             onClick={() => setActiveTool(t.key)}
             className={cn(
               "w-full text-left text-sm px-3 py-1.5 rounded hover:bg-[#121827] flex items-center gap-2 transition-colors",
-              activeTool === t.key && "text-[#3B82F6] bg-[#121827]/70",
+              activeTool === t.key ? "text-[#3B82F6] bg-[#121827]/70" : "text-muted-foreground/80 hover:text-foreground",
             )}
           >
+            <t.icon className="h-3.5 w-3.5 shrink-0" />
             {t.label}
           </button>
         ))}
       </div>
 
       <div className="p-3 text-[10px] text-muted-foreground/50 border-t border-[#1E293B]">
-        100% local · QVAC
+        100% local · fully private
       </div>
     </div>
   );

@@ -445,6 +445,9 @@ export function ChatInterface() {
               <p className="mt-2 max-w-md mx-auto text-sm text-muted-foreground">
                 Paste a customer message for an instant draft, or describe the situation in the chat below.
               </p>
+              <p className="mt-2.5 text-[11px] text-muted-foreground/45 tracking-wide">
+                Every reply, on brand. Every agent, at their best.
+              </p>
 
               {!currentModelId && (
                 <div className="mt-4 flex flex-col items-center gap-1">
@@ -519,7 +522,7 @@ export function ChatInterface() {
 
               {/* Quick chips */}
               <div className="mt-5 flex flex-wrap justify-center gap-2 text-xs">
-                {["Draft reply for delayed withdrawal", "KYC document requirements", "API key troubleshooting", "Translate to Spanish", "Review my draft for tone"].map((ex) => (
+                {["Draft reply for delayed withdrawal", "KYC document requirements", "API key troubleshooting", "Check security details on this reply", "Translate to Spanish"].map((ex) => (
                   <button
                     key={ex}
                     onClick={() => setInput(ex)}

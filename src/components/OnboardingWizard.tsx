@@ -120,7 +120,7 @@ export function OnboardingWizard({ open: wizardOpen, onOpenChange }: OnboardingW
             <Bot className="h-9 w-9 text-primary" />
           </div>
           <p className="text-lg text-foreground/90">
-            Cortex helps you draft fast, consistent, professional replies — everything runs on your Mac, privately.
+            Cortex helps you draft fast, consistent, professional replies — everything runs on your Mac, privately. Every agent sounds like your best agent on their best day.
           </p>
           <div className="rounded-lg border border-border bg-card/60 p-4 text-left text-sm">
             <div className="font-medium mb-1">In the next 2 minutes you will:</div>
@@ -257,7 +257,7 @@ export function OnboardingWizard({ open: wizardOpen, onOpenChange }: OnboardingW
     <Dialog open={wizardOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg bg-background border-border p-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-2 border-b border-border">
-          <DialogTitle className="text-xl tracking-[-0.3px]">Quick setup</DialogTitle>
+          <DialogTitle className="text-xl tracking-[-0.3px]">Get started with Cortex</DialogTitle>
           <DialogDescription>
             Step {step + 1} of {totalSteps} — {current.subtitle}
           </DialogDescription>

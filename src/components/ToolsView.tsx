@@ -40,7 +40,7 @@ export function ToolsView() {
           </Button>
           <div>
             <div className="font-semibold tracking-[-0.2px]">{title}</div>
-            <div className="text-[11px] text-muted-foreground">Quick action using current CS Agent settings & tone</div>
+            <div className="text-[11px] text-muted-foreground">Grammar, translate, and templates — everything stays local.</div>
           </div>
         </div>
         <div className="text-xs text-muted-foreground rounded bg-[#121827] px-2 py-0.5 border border-[#1E293B]">
