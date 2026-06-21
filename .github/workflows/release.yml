@@ -1,0 +1,77 @@
+name: Release
+
+# Triggers on version tags (e.g. git tag v0.2.0 && git push --tags)
+# or manually via Actions → Run workflow.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  release-macos:
+    runs-on: macos-latest
+    permissions:
+      contents: write   # needed to create the GitHub Release
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install Rust (stable, aarch64-apple-darwin)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      # tauri-action builds the app, signs the artifacts with the private key,
+      # creates the GitHub Release, and uploads .dmg + .dmg.sig + latest.json.
+      - name: Build and publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Add these two secrets in GitHub → Settings → Secrets → Actions:
+          #   TAURI_SIGNING_PRIVATE_KEY  → contents of ~/.tauri/cortex.key (generate once: pnpm tauri signer generate -w ~/.tauri/cortex.key)
+          #   TAURI_SIGNING_PRIVATE_KEY_PASSWORD → password you set when generating (leave empty if none)
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Cortex ${{ github.ref_name }}'
+          releaseBody: |
+            ## Download
+
+            | Platform | File |
+            |---|---|
+            | macOS Apple Silicon | `Cortex_*_aarch64.dmg` |
+
+            ## Requirements
+
+            Cortex uses a Node.js sidecar for local AI inference.
+            You need **Node.js 18+** installed on your machine (`node --version` to check).
+
+            ## First run
+
+            On first use the app downloads the default AI model (~500 MB) via the QVAC registry.
+            Subsequent launches are instant from the local cache at `~/.qvac/models`.
+          releaseDraft: false
+          prerelease: false
+          args: --target aarch64-apple-darwin

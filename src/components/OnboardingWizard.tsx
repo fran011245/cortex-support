@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useAgentStore } from "@/stores/useAgentStore";
 import { buildSystemPrompt, estimateTokens } from "@/lib/prompts";
-import { loadLocalModel } from "@/lib/qvac";
+import { loadLocalModel, type ModelDownloadProgress } from "@/lib/qvac";
 import { open } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { Bot, FolderOpen, Eye, Check, ArrowRight, SkipForward } from "lucide-react";
 import { RecommendedModels } from "@/components/RecommendedModels";
+import { AGENT_PROFILES, getAgentProfile } from "@/lib/agentProfiles";
 
 interface OnboardingWizardProps {
   open: boolean;
@@ -24,8 +25,10 @@ export function OnboardingWizard({ open: wizardOpen, onOpenChange }: OnboardingW
 
   const [step, setStep] = useState(0);
   const [isLoadingModel, setIsLoadingModel] = useState(false);
-  const [modelLoadProgress, setModelLoadProgress] = useState<{ percentage?: number } | null>(null);
+  const [loadingModelId, setLoadingModelId] = useState<string | null>(null);
+  const [modelLoadProgress, setModelLoadProgress] = useState<ModelDownloadProgress | null>(null);
   const [isIndexing, setIsIndexing] = useState(false);
+  const currentLoadControllerRef = useRef<AbortController | null>(null);
 
   const effectivePrompt = buildSystemPrompt(
     settings?.systemPrompt || "",
@@ -33,7 +36,7 @@ export function OnboardingWizard({ open: wizardOpen, onOpenChange }: OnboardingW
     settings?.extraInstructions
   );
 
-  const totalSteps = 5;
+  const totalSteps = 6;
   const progress = Math.round(((step + 1) / totalSteps) * 100);
 
   const goNext = () => setStep((s) => Math.min(s + 1, totalSteps - 1));
@@ -55,28 +58,64 @@ export function OnboardingWizard({ open: wizardOpen, onOpenChange }: OnboardingW
 
   // Step 2: Model loading (reuses real load flow)
   const loadModelInWizard = async (src: string) => {
+    // Cancel any previous
+    if (currentLoadControllerRef.current) {
+      currentLoadControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    currentLoadControllerRef.current = controller;
+
     setIsLoadingModel(true);
+    setLoadingModelId(src);
     setModelLoadProgress(null);
+    // Select the model being loaded right away so the card + progress reflect
+    // the actual choice (not the previous default) during the download.
+    updateSettings({ defaultModelId: src });
     try {
+      // Reuse the cached download; loadLocalModel auto-clears + retries on a real lock error.
       const handle = await loadLocalModel({
         modelSrc: src,
         modelType: "llamacpp-completion",
         modelConfig: { ctx_size: 4096 },
         onProgress: (p) => setModelLoadProgress(p),
+        signal: controller.signal,
       });
       setModelId(handle);
-      await updateSettings({ defaultModelId: src });
       toast.success("Model ready", { description: src });
       // Small delay so user sees the "Loaded" state before next
       setTimeout(() => {
         goNext();
       }, 600);
     } catch (e: any) {
-      toast.error("Load failed", { description: e?.message || "See console" });
+      if (e?.name === "AbortError") {
+        return; // user cancelled
+      }
+      const msg = e?.message || "See console";
+      toast.error("Load failed after retry", { 
+        description: msg + ". Use 'Clear model cache' in Settings." 
+      });
     } finally {
+      if (currentLoadControllerRef.current === controller) {
+        currentLoadControllerRef.current = null;
+      }
       setIsLoadingModel(false);
+      setLoadingModelId(null);
       setModelLoadProgress(null);
     }
+  };
+
+  const cancelModelLoadInWizard = (id: string) => {
+    if (currentLoadControllerRef.current) {
+      currentLoadControllerRef.current.abort();
+      currentLoadControllerRef.current = null;
+    }
+    import("@/lib/qvac").then(({ clearModelCache }) => {
+      clearModelCache(id).catch(() => {});
+    });
+    setIsLoadingModel(false);
+    setLoadingModelId(null);
+    setModelLoadProgress(null);
+    toast.info("Download cancelled");
   };
 
   // Step 3: RAG folder + index (reuses existing flows)
@@ -125,6 +164,7 @@ export function OnboardingWizard({ open: wizardOpen, onOpenChange }: OnboardingW
           <div className="rounded-lg border border-border bg-card/60 p-4 text-left text-sm">
             <div className="font-medium mb-1">In the next 2 minutes you will:</div>
             <ul className="space-y-1 text-muted-foreground">
+              <li>• Choose your support profile (Wealth, Fintech or Crypto)</li>
               <li>• Pick the best model for your Mac (with real RAM guidance)</li>
               <li>• Connect your internal docs so answers are accurate</li>
               <li>• See exactly what prompt the model receives</li>
@@ -135,21 +175,91 @@ export function OnboardingWizard({ open: wizardOpen, onOpenChange }: OnboardingW
         </div>
       ),
     },
-    // 1. Model (highlight)
+    // 1. Choose Agent Profile (new major step)
+    {
+      title: "Choose your support profile",
+      subtitle: "This sets the right tone, language and behavior for your vertical from day one",
+      content: (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground text-center">
+            Pick the profile that best matches your operation. You can always change it later in Settings.
+          </p>
+
+          <div className="grid grid-cols-1 gap-3">
+            {AGENT_PROFILES.map((profile) => {
+              const isSelected = settings?.agentProfile === profile.id;
+              return (
+                <div
+                  key={profile.id}
+                  onClick={() => {
+                    const p = getAgentProfile(profile.id);
+                    const mergedTone = {
+                    ...(settings?.toneRules || {}),
+                    ...p.defaultToneRules,
+                    style: p.defaultToneRules.style || settings?.toneRules?.style || p.activeStylePreset,
+                  } as any;
+
+                  updateSettings({
+                    agentProfile: profile.id,
+                    systemPrompt: p.baseSystemPrompt,
+                    toneRules: mergedTone,
+                    activeStylePreset: p.activeStylePreset,
+                    extraInstructions: p.suggestedExtraInstructions || "",
+                  });
+                  }}
+                  className={`glass rounded-xl border p-4 cursor-pointer transition-all active:scale-[0.985] ${
+                    isSelected
+                      ? "border-primary/70 ring-1 ring-primary/20"
+                      : "border-border hover:border-border/70"
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="font-semibold text-base tracking-[-0.2px]">{profile.name}</div>
+                      <div className="text-[12px] text-muted-foreground mt-0.5">{profile.shortDescription}</div>
+                    </div>
+                    {isSelected && (
+                      <div className="text-[10px] text-primary font-medium px-2 py-0.5 rounded bg-primary/10">Selected</div>
+                    )}
+                  </div>
+
+                  <div className="mt-2 text-xs text-muted-foreground/90">
+                    {profile.audience}
+                  </div>
+
+                  <div className="mt-2 text-[11px] leading-snug text-muted-foreground/80">
+                    {profile.id === "wealth" && "Discreet, precise, compliance-aware. Ideal for HNW, trusts & private banking."}
+                    {profile.id === "fintech" && "Clear, action-oriented, modern. Great for payments, cards, lending & neobanks."}
+                    {profile.id === "crypto" && "Technical, security-first, on-chain precise. Built for exchanges, wallets & DeFi."}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <p className="text-[10px] text-center text-muted-foreground pt-1">
+            The Live Effective Prompt step will show exactly what the chosen profile sends to the model.
+          </p>
+        </div>
+      ),
+    },
+    // 2. Model (highlight)
     {
       title: "Choose your model",
       subtitle: "This is the most important choice for speed and quality on your Mac",
       content: (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">All models run 100% locally via QVAC. Pick one and load it now — the first download is the only wait.</p>
+          <p className="text-[10px] text-amber-400/80">Modelos locales pequeños: fidelidad factual moderada. Pueden alucinar. Usa RAG y revisa los borradores.</p>
 
           <RecommendedModels
             selectedId={settings?.defaultModelId || ""}
             lastLoadedId={null} // wizard tracks via its own loading state
-            loadingId={isLoadingModel ? (settings?.defaultModelId || null) : null}
+            loadingId={loadingModelId}
             loadProgress={modelLoadProgress}
             onSelect={(id) => updateSettings({ defaultModelId: id })}
             onLoad={(id) => loadModelInWizard(id)}
+            onCancel={cancelModelLoadInWizard}
             disableLoad={isLoadingModel}
           />
 
@@ -157,7 +267,7 @@ export function OnboardingWizard({ open: wizardOpen, onOpenChange }: OnboardingW
         </div>
       ),
     },
-    // 2. Knowledge Base
+    // 3. Knowledge Base
     {
       title: "Connect your Knowledge Base",
       subtitle: "Give Cortex your internal docs so replies are accurate and on-brand",
@@ -185,7 +295,7 @@ export function OnboardingWizard({ open: wizardOpen, onOpenChange }: OnboardingW
         </div>
       ),
     },
-    // 3. Effective Prompt transparency
+    // 4. Effective Prompt transparency
     {
       title: "See exactly what the model receives",
       subtitle: "Transparency is one of Cortex's superpowers",
@@ -210,7 +320,7 @@ export function OnboardingWizard({ open: wizardOpen, onOpenChange }: OnboardingW
         </div>
       ),
     },
-    // 4. Behavior + Finish
+    // 5. Behavior + Finish
     {
       title: "A few quick behaviors",
       subtitle: "These make a big difference for support work",

@@ -7,6 +7,8 @@ import { getEffectiveSystemPrompt } from "@/lib/settings";
 import { streamCompletion } from "@/lib/qvac";
 import { toast } from "sonner";
 import { Loader2, Copy, Check } from "lucide-react";
+import { useToolModel } from "./useToolModel";
+import { ToolLoadingPanel } from "./ToolLoadingPanel";
 
 const LANGUAGES = [
   { code: "es", label: "Spanish (ES)" },
@@ -26,8 +28,7 @@ export function SmartTranslate() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const currentModelId = useAgentStore((s) => s.currentModelId);
-  const settings = useAgentStore((s) => s.settings);
+  const { statusText, ensureModelLoaded } = useToolModel("Translating…");
 
   const swap = () => {
     setFromLang(toLang);
@@ -73,15 +74,10 @@ Translated version in ${toLabel}:`;
         { role: "user" as const, content: task },
       ];
 
-      const modelId = currentModelId || settings?.defaultModelId || "";
-      if (!modelId) {
-        toast.error("No model loaded. Load one in Chat or set in Settings.");
-        setIsProcessing(false);
-        return;
-      }
+      const modelId = await ensureModelLoaded();
 
       let full = "";
-      await streamCompletion({
+      const result = await streamCompletion({
         modelId,
         history,
         temperature: 0.15,
@@ -92,8 +88,18 @@ Translated version in ${toLabel}:`;
         },
       });
 
-      setOutput(full.trim());
-      toast.success(`Translated to ${toLabel}`);
+      const finalText = (result.text || full).trim();
+      setOutput(finalText);
+      if (finalText) {
+        toast.success(`Translated to ${toLabel}`);
+      } else if (result.thinking?.trim()) {
+        // Reasoning model spent its budget thinking and never emitted a final answer.
+        toast.error("No final answer", {
+          description: "The model reasoned but didn't produce a translation. Try again or raise Max tokens in Settings.",
+        });
+      } else {
+        toast.error("No text returned", { description: "The model returned nothing. Try again." });
+      }
     } catch (e: any) {
       toast.error("Translation failed", { description: e?.message });
     } finally {
@@ -171,9 +177,17 @@ Translated version in ${toLabel}:`;
         </Button>
       </div>
 
-      {output && (
+      {isProcessing && !output ? (
         <div className="space-y-2">
           <div className="text-sm font-medium">Result ({LANGUAGES.find((l) => l.code === toLang)?.label})</div>
+          <ToolLoadingPanel statusText={statusText} minH="min-h-[100px]" />
+        </div>
+      ) : output ? (
+        <div className="space-y-2">
+          <div className="text-sm font-medium flex items-center gap-2">
+            Result ({LANGUAGES.find((l) => l.code === toLang)?.label})
+            {isProcessing && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
+          </div>
           <div className="glass border border-[#1E293B] rounded-xl p-4 whitespace-pre-wrap text-sm leading-relaxed min-h-[100px]">
             {output}
           </div>
@@ -187,7 +201,7 @@ Translated version in ${toLabel}:`;
             </Button>
           </div>
         </div>
-      )}
+      ) : null}
 
       <p className="text-xs text-muted-foreground">
         Smart translate uses the current CS Agent prompt so the result stays on-tone for professional support.
