@@ -37,7 +37,7 @@
       "icons/icon.ico"
     ],
     "resources": ["qvac-host.cjs"],
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": false
   },
   "plugins": {
     "updater": {
