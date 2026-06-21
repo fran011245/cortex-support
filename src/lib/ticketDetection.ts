@@ -21,7 +21,7 @@ export function detectTicketType(text: string): string | null {
   if (/\b(api|endpoint|rate.?limit|signature|nonce|api key|integration)\b/.test(t)) {
     return "API / integration issue";
   }
-  if (/\b(comprom|2fa|hacked|suspicious|unauthorized|account.?access|security)\b/.test(t)) {
+  if (/\bcompromis|\b(2fa|hacked|suspicious|unauthorized|account.?access|security)\b/.test(t)) {
     return "security concern";
   }
 
