@@ -21,11 +21,20 @@ import { DEFAULT_EMBED_MODEL } from "./settings";
 
 export type QVACModelType = "llm" | "embeddings" | "llamacpp-completion";
 
+export interface ModelDownloadProgress {
+  percentage: number;
+  bytesLoaded?: number;
+  bytesTotal?: number;
+  // speedMBps can be computed client-side
+}
+
 export interface QVACLoadOptions {
   modelSrc: string; // local path, url, or registry id like LLAMA_3_2_1B_INST_Q4_0 (use exact SDK constants)
   modelType?: QVACModelType;
   modelConfig?: Record<string, any>;
-  onProgress?: (progress: { percentage: number; bytesLoaded?: number; bytesTotal?: number }) => void;
+  onProgress?: (progress: ModelDownloadProgress) => void;
+  /** AbortSignal to cancel an in-progress download */
+  signal?: AbortSignal;
 }
 
 export interface ChatMessage {
@@ -87,23 +96,83 @@ export async function shutdownQVAC(): Promise<void> {
  * Always pass exact registry constants for first-time loads (see DEBUG_MODEL_LOADING.md).
  */
 export async function loadLocalModel(options: QVACLoadOptions): Promise<string> {
-  const { modelSrc, modelType = "llamacpp-completion", modelConfig = {}, onProgress } = options;
+  const { modelSrc, modelType = "llamacpp-completion", modelConfig = {}, onProgress, signal } = options;
 
-  const modelId = await bridgeLoadModel(
-    {
-      modelSrc,
-      modelType,
-      modelConfig: {
-        ctx_size: 4096,
-        ...modelConfig,
+  const attemptLoad = async () => {
+    const modelId = await bridgeLoadModel(
+      {
+        modelSrc,
+        modelType,
+        modelConfig: {
+          ctx_size: 4096,
+          ...modelConfig,
+        },
       },
-    },
-    onProgress
-  );
+      onProgress,
+      signal
+    );
+    loadedModels.set(modelSrc, modelId);
+    console.log(`[QVAC] Loaded model ${modelSrc} -> ${modelId}`);
+    return modelId;
+  };
 
-  loadedModels.set(modelSrc, modelId);
-  console.log(`[QVAC] Loaded model ${modelSrc} -> ${modelId}`);
-  return modelId;
+  // Listen to external abort for early exit + cleanup
+  if (signal) {
+    if (signal.aborted) {
+      await (async () => {
+        try {
+          const { bridgeClearCache } = await import("./qvac-bridge");
+          await bridgeClearCache(typeof modelSrc === "string" ? modelSrc : undefined);
+        } catch {}
+      })();
+      throw new DOMException("Aborted", "AbortError");
+    }
+    const onAbort = async () => {
+      try {
+        const { bridgeClearCache } = await import("./qvac-bridge");
+        await bridgeClearCache(typeof modelSrc === "string" ? modelSrc : undefined);
+      } catch {}
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  }
+
+  try {
+    return await attemptLoad();
+  } catch (err: any) {
+    const msg = (err?.message || String(err)).toLowerCase();
+    const isLockError = msg.includes("lock") || msg.includes("descriptor");
+
+    if (isLockError) {
+      console.warn("[QVAC] Load lock error, clearing cache for", modelSrc, "and retrying once...");
+      try {
+        const { bridgeClearCache } = await import("./qvac-bridge");
+        await bridgeClearCache(typeof modelSrc === "string" ? modelSrc : undefined);
+      } catch (clearErr) {
+        console.warn("[QVAC] clear cache failed", clearErr);
+      }
+
+      // retry once after clear
+      try {
+        return await attemptLoad();
+      } catch (retryErr: any) {
+        console.error("[QVAC] Retry after clear also failed", retryErr);
+        throw retryErr;
+      }
+    }
+
+    throw err;
+  }
+}
+
+/**
+ * Returns the runtime handle for an already-loaded model src, or undefined.
+ * Unlike the store's currentModelId (which resets on settings reload), this
+ * reflects what was actually loaded into the worker this session — so callers
+ * can skip a redundant "Loading model…" step when the model is already up.
+ */
+export function getLoadedModelId(src?: string): string | undefined {
+  if (!src) return undefined;
+  return loadedModels.get(src);
 }
 
 export async function unloadLocalModel(modelIdOrSrc: string): Promise<void> {
@@ -179,6 +248,11 @@ export const rag = {
 export async function listCachedModels(): Promise<{ modelsDir: string; files: string[] }> {
   const { bridgeListModels } = await import("./qvac-bridge");
   return bridgeListModels();
+}
+
+export async function clearModelCache(src?: string): Promise<void> {
+  const { bridgeClearCache } = await import("./qvac-bridge");
+  await bridgeClearCache(src);
 }
 
 export async function getAvailableModels(): Promise<any[]> {

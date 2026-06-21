@@ -149,12 +149,14 @@ function routeMessage(msg: any) {
   }
 
   if (type === "ack") {
+    // Streaming commands (bridgeComplete sets onFinal) send an early ack carrying only
+    // the sdk requestId (for cancellation). That ack is NOT the result — resolving here
+    // would settle the promise with an empty payload before any token streams. Keep the
+    // pending open and let the later `final` message resolve it.
+    if (pend.onFinal) return;
+    // Non-streaming command — the ack IS the result.
     pend.resolve(result);
-    // For streaming commands the ack may contain the sdk requestId; we keep the pending open for events/final
-    if (!result?.requestId) {
-      // Non-streaming command — done
-      pending.delete(id);
-    }
+    pending.delete(id);
   } else if (type === "event" && event && pend.onEvent) {
     pend.onEvent(event);
   } else if (type === "final" && result) {
@@ -201,7 +203,8 @@ export async function bridgeLoadModel(
     modelType?: string;
     modelConfig?: Record<string, any>;
   },
-  onProgress?: (progress: any) => void
+  onProgress?: (progress: import("./qvac").ModelDownloadProgress) => void,
+  signal?: AbortSignal
 ): Promise<string> {
   const id = nextId();
   const c = await ensureChild();
@@ -230,6 +233,17 @@ export async function bridgeLoadModel(
       progressListeners.delete(id);
       reject(e);
     });
+
+    // Support abort / cancel
+    const onAbort = () => {
+      if (pending.has(id)) {
+        pending.delete(id);
+        progressListeners.delete(id);
+        sendCommand("cancelLoad", { loadId: id }).catch(() => {});
+        reject(new DOMException("Aborted", "AbortError"));
+      }
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
 
     // Generous timeout for first-time downloads of registry models.
     setTimeout(() => {
@@ -324,6 +338,14 @@ export async function bridgeRagSearch(params: { query: string; workspace?: strin
 
 export async function bridgeListModels(): Promise<{ modelsDir: string; files: string[] }> {
   return sendCommand("listModels");
+}
+
+export async function bridgeClearCache(src?: string): Promise<{ ok: boolean }> {
+  return sendCommand("clearCache", { src });
+}
+
+export async function bridgeCancelLoad(loadId: string): Promise<void> {
+  await sendCommand("cancelLoad", { loadId });
 }
 
 // Cleanup on window unload (dev convenience)

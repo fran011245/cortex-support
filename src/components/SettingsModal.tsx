@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -17,32 +17,39 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAgentStore } from "@/stores/useAgentStore";
 import { DEFAULT_SYSTEM_PROMPT, TONE_PRESETS, type ToneRules, buildSystemPrompt, estimateTokens } from "@/lib/prompts";
 import type { CSSettings } from "@/lib/settings";
-import { loadLocalModel, listCachedModels } from "@/lib/qvac";
+import { loadLocalModel, listCachedModels, type ModelDownloadProgress } from "@/lib/qvac";
 import { DEFAULT_LLM_MODEL, DEFAULT_EMBED_MODEL, RECOMMENDED_LLM_MODELS } from "@/lib/settings";
 import { toast } from "sonner";
-import { FolderOpen, RefreshCw, Info, Settings, Bot, Database, Check, Copy } from "lucide-react";
+import { FolderOpen, RefreshCw, Info, Settings, Bot, Database, Check, Copy, Sliders, FileQuestion, ExternalLink } from "lucide-react";
 import { MODEL_GUIDE, GUIDE_COMMON_NOTES } from "@/lib/modelGuide";
 import { RecommendedModels } from "@/components/RecommendedModels";
+import { AGENT_PROFILES, getAgentProfile, type AgentProfileId } from "@/lib/agentProfiles";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { revealItemInDir, openUrl } from "@tauri-apps/plugin-opener";
+import { getVersion } from "@tauri-apps/api/app";
 
 export function SettingsModal() {
   const { isSettingsOpen, setSettingsOpen, settings, updateSettings, setModelId, setOnboardingOpen } = useAgentStore();
   const [local, setLocal] = useState(settings);
   const [isReindexing, setIsReindexing] = useState(false);
-  const [modelLoadProgress, setModelLoadProgress] = useState<{ percentage?: number } | null>(null);
+  const [modelLoadProgress, setModelLoadProgress] = useState<ModelDownloadProgress | null>(null);
   const [cachedModels, setCachedModels] = useState<{ modelsDir?: string; files?: string[] } | null>(null);
-  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [updateState, setUpdateState] = useState<"idle" | "checking" | "up-to-date" | "available" | "no-releases" | "error">("idle");
   const [updateInfo, setUpdateInfo] = useState<any>(null);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [loadingTarget, setLoadingTarget] = useState<string | null>(null);
   const [lastLoadedSpec, setLastLoadedSpec] = useState<string | null>(null);
+  const currentLoadControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (settings) setLocal(settings);
+    if (isSettingsOpen && !appVersion) {
+      getVersion().then(setAppVersion).catch(() => {});
+    }
   }, [settings, isSettingsOpen]);
 
   if (!local) return null;
@@ -91,14 +98,23 @@ export function SettingsModal() {
   // Premium model loading with per-target progress + state tracking.
   // Sets both runtime handle and persists the spec as defaultModelId (live-apply safe).
   const loadModel = async (src: string) => {
+    // Cancel any previous load
+    if (currentLoadControllerRef.current) {
+      currentLoadControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    currentLoadControllerRef.current = controller;
+
     setLoadingTarget(src);
     setModelLoadProgress(null);
     try {
+      // Reuse the cached download; loadLocalModel auto-clears + retries on a real lock error.
       const handle = await loadLocalModel({
         modelSrc: src,
         modelType: "llamacpp-completion",
         modelConfig: { ctx_size: 4096 },
         onProgress: (p) => setModelLoadProgress(p),
+        signal: controller.signal,
       });
       setModelId(handle);
       await updateSettings({ defaultModelId: src });
@@ -106,10 +122,45 @@ export function SettingsModal() {
       setLocal((prev) => prev && ({ ...prev, defaultModelId: src }));
       toast.success("Model ready", { description: src });
     } catch (e: any) {
-      toast.error("Load failed", { description: e?.message || "See console" });
+      if (e?.name === "AbortError") {
+        // cancelled by user
+        return;
+      }
+      const msg = e?.message || "See console";
+      toast.error("Load failed after retry", { 
+        description: msg + ". Use the 'Clear model cache' button below or restart the app." 
+      });
     } finally {
+      if (currentLoadControllerRef.current === controller) {
+        currentLoadControllerRef.current = null;
+      }
       setLoadingTarget(null);
       setModelLoadProgress(null);
+    }
+  };
+
+  const cancelCurrentModelLoad = (id: string) => {
+    if (currentLoadControllerRef.current) {
+      currentLoadControllerRef.current.abort();
+      currentLoadControllerRef.current = null;
+    }
+    // Also proactively clear the partial download
+    import("@/lib/qvac").then(({ clearModelCache }) => {
+      clearModelCache(id).catch(() => {});
+    });
+    setLoadingTarget(null);
+    setModelLoadProgress(null);
+    toast.info("Download cancelled");
+  };
+
+  const pickLocalModelFile = async () => {
+    const selected = await open({
+      multiple: false,
+      filters: [{ name: "GGUF Model", extensions: ["gguf"] }],
+      title: "Select a local GGUF model file",
+    });
+    if (typeof selected === "string") {
+      setAndPersist({ defaultModelId: selected });
     }
   };
 
@@ -197,21 +248,25 @@ export function SettingsModal() {
   };
 
   const checkForAppUpdate = async () => {
-    setCheckingUpdate(true);
+    setUpdateState("checking");
     setUpdateInfo(null);
     try {
       const update = await check();
       if (update?.available) {
         setUpdateInfo(update);
-        toast.info(`Update available: ${update.version}`, { description: (update as any).body || (update as any).notes || "New version ready to install" });
+        setUpdateState("available");
+        toast.success(`Update available: v${update.version}`);
       } else {
-        toast.success("You're on the latest version");
+        setUpdateState("up-to-date");
       }
     } catch (e: any) {
-      console.error("[Cortex updater]", e);
-      toast.error("Update check failed", { description: "Updater not fully configured yet (needs real pubkey + latest.json on GH releases). Use manual download from landing for now." });
-    } finally {
-      setCheckingUpdate(false);
+      console.warn("[Cortex updater]", e);
+      const msg = String(e?.message || e);
+      if (msg.includes("404") || msg.includes("Not Found") || msg.toLowerCase().includes("fetch") || msg.includes("status code")) {
+        setUpdateState("no-releases");
+      } else {
+        setUpdateState("error");
+      }
     }
   };
 
@@ -220,10 +275,18 @@ export function SettingsModal() {
     try {
       toast.info("Downloading & installing update...");
       await updateInfo.downloadAndInstall();
-      toast.success("Update installed — restarting app");
+      toast.success("Update installed — restarting");
       await relaunch();
     } catch (e: any) {
       toast.error("Install failed", { description: e?.message || "See console for details" });
+    }
+  };
+
+  const openGitHubReleases = async () => {
+    try {
+      await openUrl("https://github.com/fran011245/cortex-support/releases/latest");
+    } catch {
+      window.open("https://github.com/fran011245/cortex-support/releases/latest", "_blank");
     }
   };
 
@@ -232,9 +295,9 @@ export function SettingsModal() {
       <Dialog open={isSettingsOpen} onOpenChange={setSettingsOpen}>
       <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col bg-background border-border text-foreground p-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-2 border-b border-border shrink-0">
-          <DialogTitle className="text-xl tracking-[-0.3px]">CS Settings</DialogTitle>
+          <DialogTitle className="text-xl tracking-[-0.3px]">Settings</DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Full control over agent personality, tone, models, and knowledge base. Changes apply instantly to new generations.
+            Agent personality, tone, models, and knowledge base. Changes apply instantly.
           </DialogDescription>
         </DialogHeader>
 
@@ -244,12 +307,52 @@ export function SettingsModal() {
           <TabsList className="mx-6 mt-4 mb-2 w-fit bg-card border border-border shrink-0">
             <TabsTrigger value="general" className="gap-1.5"><Settings className="h-3.5 w-3.5" /> General</TabsTrigger>
             <TabsTrigger value="prompt" className="gap-1.5"><Bot className="h-3.5 w-3.5" /> Agent Prompt</TabsTrigger>
-            <TabsTrigger value="tone" className="gap-1.5"><Settings className="h-3.5 w-3.5" /> Tone Rules</TabsTrigger>
+            <TabsTrigger value="tone" className="gap-1.5"><Sliders className="h-3.5 w-3.5" /> Tone Rules</TabsTrigger>
             <TabsTrigger value="kb" className="gap-1.5"><Database className="h-3.5 w-3.5" /> Knowledge Base</TabsTrigger>
           </TabsList>
 
           {/* Agent Prompt — now a first-class Prompt Composer (Fase 2) */}
           <TabsContent value="prompt" className="px-6 pt-4 pb-6 space-y-4 flex-1 min-h-0 overflow-y-auto">
+            {/* Current Profile quick switcher */}
+            {settings?.agentProfile && (
+              <div className="flex items-center justify-between rounded-lg border border-border bg-card/60 px-3 py-2 text-sm">
+                <div>
+                  <span className="text-muted-foreground text-xs">Current profile:</span>{" "}
+                  <span className="font-medium">
+                    {getAgentProfile(settings.agentProfile as AgentProfileId).name}
+                  </span>
+                </div>
+                <div className="flex gap-1">
+                  {AGENT_PROFILES.map((p) => (
+                    <Button
+                      key={p.id}
+                      size="sm"
+                      variant={settings.agentProfile === p.id ? "default" : "outline"}
+                      className="h-7 text-[11px] px-2"
+                      onClick={() => {
+                        const profile = getAgentProfile(p.id);
+                        const mergedTone = {
+                          ...local.toneRules,
+                          ...profile.defaultToneRules,
+                          style: profile.defaultToneRules.style || local.toneRules?.style || profile.activeStylePreset,
+                        } as any;
+
+                        setAndPersist({
+                          agentProfile: p.id,
+                          systemPrompt: profile.baseSystemPrompt,
+                          toneRules: mergedTone,
+                          activeStylePreset: profile.activeStylePreset,
+                          extraInstructions: profile.suggestedExtraInstructions || "",
+                        });
+                      }}
+                    >
+                      {p.name.split(" ")[0]}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* HERO: Live Effective Prompt — the star of the show. Prominent, calm, actionable. */}
             <div className="glass rounded-xl border border-border p-4 space-y-3">
               <div className="flex items-start justify-between gap-3">
@@ -319,10 +422,19 @@ export function SettingsModal() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setAndPersist({ systemPrompt: DEFAULT_SYSTEM_PROMPT })}
+                  onClick={() => {
+                    const currentProfileId = (local.agentProfile as AgentProfileId) || "crypto";
+                    const profile = getAgentProfile(currentProfileId);
+                    setAndPersist({
+                      systemPrompt: profile.baseSystemPrompt,
+                      toneRules: { ...local.toneRules, ...profile.defaultToneRules },
+                      activeStylePreset: profile.activeStylePreset,
+                      extraInstructions: profile.suggestedExtraInstructions || "",
+                    });
+                  }}
                   className="h-7 text-xs text-muted-foreground hover:text-foreground px-2"
                 >
-                  Restore default prompt
+                  Restore profile defaults
                 </Button>
                 <span className="text-[10px] text-muted-foreground/70">Tone rules &amp; extra instructions (Tone tab) are merged on top of this</span>
               </div>
@@ -395,6 +507,7 @@ export function SettingsModal() {
               <div className="flex items-center justify-between rounded border border-border bg-card p-3">
                 <div>
                   <div className="text-sm">Direct but polite</div>
+                  <div className="text-xs text-muted-foreground">Assertive without unnecessary hedging</div>
                 </div>
                 <Switch
                   checked={local.toneRules.beDirectButPolite}
@@ -405,6 +518,7 @@ export function SettingsModal() {
               <div className="flex items-center justify-between rounded border border-border bg-card p-3">
                 <div>
                   <div className="text-sm">Prioritize security warnings</div>
+                  <div className="text-xs text-muted-foreground">Highlight 2FA, TXID, and account safety steps</div>
                 </div>
                 <Switch
                   checked={local.toneRules.prioritizeSecurity}
@@ -437,6 +551,7 @@ export function SettingsModal() {
                 )}
               </div>
               <p className="text-[11px] text-muted-foreground -mt-1">Choose a recommended model or enter a custom registry ID / local GGUF path. Load downloads (if needed) and activates instantly for new generations.</p>
+              <p className="text-[10px] text-amber-400/80">Small local models have moderate factual accuracy — always review important drafts. RAG grounding helps.</p>
 
               <RecommendedModels
                 selectedId={local.defaultModelId}
@@ -445,19 +560,30 @@ export function SettingsModal() {
                 loadProgress={modelLoadProgress}
                 onSelect={(id) => setAndPersist({ defaultModelId: id })}
                 onLoad={(id) => loadModel(id)}
+                onCancel={cancelCurrentModelLoad}
                 disableLoad={!!loadingTarget}
               />
 
               {/* Custom model path / advanced ID */}
               <div className="pt-1 space-y-1.5">
                 <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Custom model</Label>
+                <p className="text-[9px] text-muted-foreground">For models like DeepSeek, enter a local .gguf path (download from Hugging Face) or a supported registry ID.</p>
                 <div className="flex gap-2">
                   <Input
                     value={local.defaultModelId}
                     onChange={(e) => setAndPersist({ defaultModelId: e.target.value })}
-                    placeholder="LLAMA_... or /path/to/model.gguf"
-                    className="bg-card border-border font-mono text-sm h-8"
+                    placeholder="LLAMA_... or registry://... or /path/to/model.gguf (for DeepSeek use the card or custom url)"
+                    className="bg-card border-border font-mono text-sm h-8 min-w-0"
                   />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs shrink-0 border-border gap-1.5"
+                    onClick={pickLocalModelFile}
+                    title="Browse for a local .gguf file"
+                  >
+                    <FolderOpen className="h-3.5 w-3.5" /> Browse
+                  </Button>
                   <Button
                     size="sm"
                     variant="outline"
@@ -468,7 +594,9 @@ export function SettingsModal() {
                     Load
                   </Button>
                 </div>
-                <p className="text-[10px] text-muted-foreground/70">Registry constant or absolute local GGUF path. The Load button above also works for custom.</p>
+                <p className="text-[10px] text-muted-foreground/70">
+                  Use Browse to pick any local <span className="font-mono">.gguf</span> file, or paste a registry constant (e.g. <span className="font-mono">LLAMA_3_2_1B_INST_Q4_0</span>).
+                </p>
               </div>
 
               <div className="pt-0.5">
@@ -499,6 +627,23 @@ export function SettingsModal() {
                   className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
                 >
                   Advanced: inspect cached models
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    try {
+                      const { clearModelCache } = await import("@/lib/qvac");
+                      await clearModelCache();
+                      setCachedModels(null);
+                      toast.success("Model cache cleared", { description: "Try loading the model again." });
+                    } catch (e: any) {
+                      toast.error("Failed to clear cache", { description: e?.message || "See console" });
+                    }
+                  }}
+                  className="h-6 px-2 text-[10px] text-amber-400 hover:text-amber-300"
+                >
+                  Clear model cache (fixes "file descriptor could not be locked")
                 </Button>
                 {cachedModels && (
                   <div className="mt-1.5 p-2 bg-card border border-border rounded text-[10px] font-mono max-h-28 overflow-auto text-muted-foreground">
@@ -594,99 +739,162 @@ export function SettingsModal() {
               </div>
             </div>
 
-            {/* Optional auto-updater (manual trigger for now; full background + signed GH releases later) */}
-            <div className="pt-4 border-t border-border space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>App updates (optional)</Label>
-                    <p className="text-xs text-muted-foreground">Check for new Cortex builds from GitHub Releases. Full auto-update requires a real pubkey + published latest.json (see README).</p>
+            <div className="pt-4 border-t border-border space-y-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Label>App updates</Label>
+                      {appVersion && (
+                        <span className="text-[10px] text-muted-foreground/50 font-mono tabular-nums">v{appVersion}</span>
+                      )}
+                    </div>
+                    <div className="mt-0.5 text-xs">
+                      {updateState === "idle" && (
+                        <span className="text-muted-foreground">Check for new builds or download directly from GitHub.</span>
+                      )}
+                      {updateState === "checking" && (
+                        <span className="text-muted-foreground">Checking...</span>
+                      )}
+                      {updateState === "up-to-date" && (
+                        <span className="text-emerald-400/90">You're on the latest version</span>
+                      )}
+                      {updateState === "available" && (
+                        <span className="text-primary">Update available — v{updateInfo?.version}</span>
+                      )}
+                      {updateState === "no-releases" && (
+                        <span className="text-muted-foreground">No published releases found — download the latest build from GitHub directly.</span>
+                      )}
+                      {updateState === "error" && (
+                        <span className="text-destructive/70">Update check failed — download latest from GitHub.</span>
+                      )}
+                    </div>
                   </div>
-                  <Button size="sm" variant="outline" onClick={checkForAppUpdate} disabled={checkingUpdate} className="h-7 text-xs border-border">
-                    {checkingUpdate ? "Checking..." : "Check for updates"}
-                  </Button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={checkForAppUpdate}
+                      disabled={updateState === "checking"}
+                      className="h-7 text-xs text-muted-foreground hover:text-foreground border border-border"
+                    >
+                      {updateState === "checking" ? "Checking..." : "Check"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={openGitHubReleases}
+                      className="h-7 text-xs border-border gap-1.5"
+                    >
+                      <ExternalLink className="h-3 w-3" /> Download .dmg
+                    </Button>
+                  </div>
                 </div>
-                {updateInfo && (
+                {updateState === "available" && updateInfo && (
                   <div className="flex items-center gap-2">
-                    <Button size="sm" onClick={installUpdate} className="h-7 text-xs btn-primary">Install v{updateInfo.version} &amp; Restart</Button>
+                    <Button size="sm" onClick={installUpdate} className="h-7 text-xs btn-primary">
+                      Install v{updateInfo.version} &amp; Restart
+                    </Button>
                     <span className="text-[10px] text-muted-foreground">Replaces current app binary.</span>
                   </div>
                 )}
-                <p className="text-[10px] text-muted-foreground/60">Private repo note: assets may require auth or be published as public release assets. You can always sync the latest .dmg URL manually to cortesupport.lovable.app.</p>
               </div>
           </TabsContent>
 
           {/* Knowledge Base */}
           <TabsContent value="kb" className="px-6 pt-4 pb-6 space-y-5 flex-1 min-h-0 overflow-y-auto">
-            <div>
-              <Label>Local documents folder</Label>
-              <div className="mt-1.5 flex gap-2">
-                <Input
-                  readOnly
-                  value={local.ragFolderPath ? local.ragFolderPath.split(/[/\\]/).pop() || local.ragFolderPath : "No folder selected — help articles, internal runbooks, policies, etc."}
-                  title={local.ragFolderPath || undefined}
-                  className="flex-1 bg-card border-border text-muted-foreground font-mono text-xs"
-                />
-                <Button variant="outline" onClick={pickRagFolder} className="gap-2 shrink-0 border-border" title="Choose folder">
-                  <FolderOpen className="h-4 w-4" /> Choose…
-                </Button>
-                {local.ragFolderPath && (
-                  <Button variant="ghost" size="icon" onClick={revealRagFolder} className="shrink-0 border-border" title="Reveal in Finder">
-                    <FolderOpen className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-              <p className="mt-1.5 text-xs text-muted-foreground">Supported: .md, .txt, .pdf (text layer). Changes require Rebuild. Use the folder icon to open in Finder.</p>
-            </div>
-
-            <div className="rounded-md border border-border bg-card p-4 text-sm">
-              <div className="flex items-center justify-between">
-                <div>
-                  Last indexed: {local.knowledgeBaseLastIndexed ? new Date(local.knowledgeBaseLastIndexed).toLocaleString() : "never"}
-                  <div className="text-muted-foreground text-xs mt-0.5">{local.knowledgeBaseDocCount || 0} documents</div>
+            {!local.ragFolderPath ? (
+              <div className="glass rounded-xl border border-dashed border-border p-10 flex flex-col items-center gap-4 text-center">
+                <div className="rounded-full bg-muted/20 p-4">
+                  <FileQuestion className="h-7 w-7 text-muted-foreground/50" />
                 </div>
-                <Button
-                  onClick={triggerReindex}
-                  disabled={!local.ragFolderPath || isReindexing}
-                  className="gap-2"
-                  variant="secondary"
-                >
-                  <RefreshCw className={`h-4 w-4 ${isReindexing ? "animate-spin" : ""}`} />
-                  {isReindexing ? "Rebuilding…" : "Rebuild Knowledge Base"}
+                <div>
+                  <div className="text-sm font-medium">No folder connected</div>
+                  <div className="text-xs text-muted-foreground mt-1 max-w-[280px]">
+                    Point Cortex to a folder of help articles, runbooks, or policy docs and the agent will cite them in replies.
+                  </div>
+                </div>
+                <Button variant="outline" onClick={pickRagFolder} className="gap-2 border-border mt-1">
+                  <FolderOpen className="h-4 w-4" /> Choose folder
                 </Button>
+                <p className="text-[10px] text-muted-foreground/50">Supports .md, .txt, .pdf — indexed locally, never leaves this machine</p>
               </div>
-            </div>
+            ) : (
+              <>
+                <div>
+                  <Label>Local documents folder</Label>
+                  <div className="mt-1.5 flex gap-2">
+                    <Input
+                      readOnly
+                      value={local.ragFolderPath.split(/[/\\]/).pop() || local.ragFolderPath}
+                      title={local.ragFolderPath}
+                      className="flex-1 bg-card border-border text-muted-foreground font-mono text-xs"
+                    />
+                    <Button variant="outline" onClick={pickRagFolder} className="gap-2 shrink-0 border-border" title="Change folder">
+                      <FolderOpen className="h-4 w-4" /> Change…
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={revealRagFolder} className="shrink-0 border-border" title="Reveal in Finder">
+                      <FolderOpen className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="mt-1.5 text-xs text-muted-foreground">Supports .md, .txt, .pdf (text layer). Changes require a Rebuild.</p>
+                </div>
 
-            <div className="text-xs text-muted-foreground/70">
-              RAG is performed entirely locally using QVAC embeddings. Your documents never leave this machine. Toggle "Enable RAG" in General tab.
-            </div>
+                <div className="glass rounded-xl border border-border p-4 text-sm">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-medium">
+                        {local.knowledgeBaseLastIndexed
+                          ? `Indexed ${new Date(local.knowledgeBaseLastIndexed).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`
+                          : "Not indexed yet"}
+                      </div>
+                      <div className="text-muted-foreground text-xs mt-0.5">
+                        {local.knowledgeBaseDocCount
+                          ? `${local.knowledgeBaseDocCount} documents in the knowledge base`
+                          : "Run Rebuild to index your documents"}
+                      </div>
+                    </div>
+                    <Button
+                      onClick={triggerReindex}
+                      disabled={isReindexing}
+                      className="gap-2"
+                      variant="secondary"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${isReindexing ? "animate-spin" : ""}`} />
+                      {isReindexing ? "Rebuilding…" : "Rebuild"}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="text-xs text-muted-foreground/70">
+                  All embeddings run locally via QVAC — your documents never leave this machine. Toggle "Enable RAG" in General to activate in chat.
+                </div>
+              </>
+            )}
           </TabsContent>
         </Tabs>
         </div> {/* close the flex-1 scroll wrapper for tab content */}
 
         <div className="flex items-center justify-between border-t border-border px-6 py-4 bg-background/60 shrink-0">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" onClick={resetToDefaults} className="text-muted-foreground">
+            <Button variant="ghost" size="sm" onClick={resetToDefaults} className="text-destructive/60 hover:text-destructive hover:bg-destructive/5 text-xs">
               Reset to defaults
             </Button>
-            <Button variant="ghost" size="sm" onClick={exportSettings} className="text-muted-foreground">Export</Button>
-            <Button variant="ghost" size="sm" onClick={importSettings} className="text-muted-foreground">Import</Button>
+            <div className="w-px h-3.5 bg-border" />
+            <Button variant="ghost" size="sm" onClick={exportSettings} className="text-muted-foreground text-xs">Export</Button>
+            <Button variant="ghost" size="sm" onClick={importSettings} className="text-muted-foreground text-xs">Import</Button>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => {
                 setSettingsOpen(false);
-                // Small delay so the settings dialog closes before the wizard opens
                 setTimeout(() => setOnboardingOpen(true), 120);
               }}
-              className="text-muted-foreground"
+              className="text-muted-foreground text-xs"
             >
               Replay tour
             </Button>
           </div>
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => setSettingsOpen(false)}>Close</Button>
-            <Button onClick={() => setSettingsOpen(false)} className="btn-primary">Done</Button>
-          </div>
+          <Button onClick={() => setSettingsOpen(false)} className="btn-primary">Done</Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -695,9 +903,9 @@ export function SettingsModal() {
     <Dialog open={isGuideOpen} onOpenChange={setIsGuideOpen}>
       <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col bg-background border-border text-foreground p-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-2 border-b border-border">
-          <DialogTitle className="text-xl tracking-[-0.3px]">Guía de Modelos — Optimizado para Mac</DialogTitle>
+          <DialogTitle className="text-xl tracking-[-0.3px]">Model Guide — Mac Optimized</DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Características y requerimientos técnicos para Apple Silicon (unified memory). Todos corren 100% local vía QVAC.
+            Technical specs and RAM requirements for Apple Silicon. All models run 100% locally via QVAC.
           </DialogDescription>
         </DialogHeader>
 
@@ -708,26 +916,44 @@ export function SettingsModal() {
               className="glass border border-border rounded-xl p-4 space-y-3"
             >
               <div>
-                <div className="font-semibold text-lg tracking-[-0.2px]">{model.name}</div>
+                <div className="flex items-center gap-2">
+                  <div className="font-semibold text-lg tracking-[-0.2px]">{model.name}</div>
+                  {model.recommended && (
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-medium">Recommended</span>
+                  )}
+                </div>
                 <div className="text-[11px] text-muted-foreground font-mono">{model.quant} • {model.ctx}</div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-sm">
                 <div>
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-0.5">RAM en Mac</div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-0.5">RAM on Mac</div>
                   <div>{model.ramMac}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-0.5">Performance en Apple Silicon</div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-0.5">Performance on Apple Silicon</div>
                   <div>{model.performanceMac}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-0.5">Mejor para</div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-0.5">Best for</div>
                   <div>{model.bestFor}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-0.5">Velocidad vs Calidad</div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-0.5">Speed vs Quality</div>
                   <div>{model.speedVsQuality}</div>
+                </div>
+
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-0.5">Parameters</div>
+                  <div>{model.paramCount}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-0.5">Min Mac spec</div>
+                  <div>{model.minMacSpec}</div>
+                </div>
+                <div className="md:col-span-2">
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70 mb-0.5">Accuracy & hallucinations</div>
+                  <div className="text-sm">{model.fidelity}</div>
                 </div>
               </div>
 
@@ -744,12 +970,12 @@ export function SettingsModal() {
           </div>
 
           <div className="text-[11px] text-primary/80 pt-2">
-            Tip: Las estadísticas minimalistas de consumo (tokens, contexto, t/s) que ahora ves en el chat te ayudan a elegir el modelo correcto según tu Mac y flujo de trabajo.
+            Tip: The usage stats shown under each reply (tokens, t/s, context) help you pick the right model for your Mac and workload.
           </div>
         </div>
 
         <div className="flex justify-end border-t border-border px-6 py-4 bg-background/60">
-          <Button variant="ghost" onClick={() => setIsGuideOpen(false)}>Cerrar</Button>
+          <Button variant="ghost" onClick={() => setIsGuideOpen(false)}>Close</Button>
         </div>
       </DialogContent>
     </Dialog>

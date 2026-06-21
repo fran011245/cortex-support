@@ -21,8 +21,9 @@
 const readline = require("readline");
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 
-// Capture the full SDK module for name -> descriptor lookup in resolveModelSrc.
+// Capture the full SDK module for name -> descriptor lookup in resolveModelDescriptor.
 // We also destructure the symbols we call directly.
 const sdk = require("@qvac/sdk");
 const {
@@ -35,6 +36,7 @@ const {
   cancel,
   ragIngest,
   ragSearch,
+  deleteCache,
 } = sdk;
 
 /**
@@ -52,6 +54,9 @@ const {
  */
 function findAndPrependBareBinToPATH() {
   const candidates = [];
+  const platform = process.platform; // darwin, linux, win32
+  const arch = process.arch; // arm64, x64
+
   try {
     // Primary: bare-runtime (provides the arch-specific bins)
     const brPkg = require.resolve("bare-runtime/package.json");
@@ -59,19 +64,34 @@ function findAndPrependBareBinToPATH() {
     candidates.push(path.join(brDir, "bin", "bare"));
     candidates.push(path.join(brDir, "node_modules", ".bin", "bare"));
   } catch (e) {}
-  try {
-    // Some pnpm layouts expose a top-level one
-    const br2 = require.resolve("bare-runtime-darwin-arm64/package.json");
-    const d = path.dirname(br2);
-    candidates.push(path.join(d, "bin", "bare"));
-  } catch (e) {}
+
+  // Platform + arch specific prebuilts (official bare-runtime packages)
+  const platformSpecific = [
+    `bare-runtime-${platform}-${arch}`,
+    platform === "darwin" && arch === "arm64" ? "bare-runtime-darwin-arm64" : null,
+    platform === "darwin" && arch === "x64" ? "bare-runtime-darwin-x64" : null,
+    platform === "linux" && arch === "arm64" ? "bare-runtime-linux-arm64" : null,
+    platform === "linux" && arch === "x64" ? "bare-runtime-linux-x64" : null,
+    platform === "win32" ? "bare-runtime-win32-x64" : null,
+  ].filter(Boolean);
+
+  for (const pkg of platformSpecific) {
+    try {
+      const br2 = require.resolve(`${pkg}/package.json`);
+      const d = path.dirname(br2);
+      candidates.push(path.join(d, "bin", "bare"));
+      candidates.push(path.join(d, "node_modules", ".bin", "bare"));
+    } catch (e) {}
+  }
+
   try {
     // The one nested under the sdk install
     const sdkPkg = require.resolve("@qvac/sdk/package.json");
     const sdkDir = path.dirname(sdkPkg);
     candidates.push(path.join(sdkDir, "node_modules", ".bin", "bare"));
   } catch (e) {}
-  // Also the pnpm central bin if present in this tree
+
+  // Also the pnpm central bin if present in this tree (dev)
   candidates.push(path.join(__dirname, "..", "node_modules", ".pnpm", "node_modules", ".bin", "bare"));
 
   for (const c of candidates) {
@@ -101,7 +121,7 @@ function findAndPrependBareBinToPATH() {
     }
   } catch (e) {}
 
-  console.error("[qvac-host] WARNING: could not auto-locate 'bare' executable. Worker spawn (needed for model downloads + provider) may fail with ENOENT. Ensure bare-runtime provides a 'bare' in PATH for this node process.");
+  console.error("[qvac-host] WARNING: could not auto-locate 'bare' executable. Worker spawn (needed for model downloads + provider) may fail with ENOENT. Ensure bare-runtime provides a 'bare' in PATH for this node process. (Checked platform-specific official bare-runtime packages for", platform, arch, ")");
 }
 
 // Run the PATH fix *immediately* (before any SDK call that may spawn the worker).
@@ -114,17 +134,51 @@ findAndPrependBareBinToPATH();
  * makes @qvac/sdk take the download-from-registry code path instead of
  * "local file / ModelNotFound".
  *
- * If it's already an object (or a full path/url), pass through unchanged.
- * This lives in the host because:
- *   - the real sdk.loadModel call happens here
- *   - internal rag embed loads (which also do loadModel) are here
- *   - the JSON over stdin can carry the object (or its serialized form) from the UI
- *   - custom user paths like "/foo/my.gguf" stay strings
+ * We prefer the *official* registry entry by calling modelRegistryGetModel when
+ * we have registryPath + registrySource (or by searching for the name). This ensures
+ * we get the correct artifact/build for the current OS/arch (macOS, Linux, Windows,
+ * arm64/x64 etc.) from the official provider.
  */
-function resolveModelSrc(input) {
+async function resolveModelDescriptor(input) {
+  // Static export if available (fast path for known models)
   if (typeof input === "string" && input && sdk[input]) {
-    return sdk[input];
+    let desc = sdk[input];
+
+    // Try to get the official platform-specific version from the registry
+    if (desc && typeof desc === "object" && desc.registryPath && desc.registrySource) {
+      try {
+        const official = await sdk.modelRegistryGetModel(desc.registryPath, desc.registrySource);
+        if (official && official.src) {
+          console.error("[qvac-host] Using official registry descriptor for", input);
+          return official;
+        }
+      } catch (e) {
+        const em = e?.message || '';
+        if (em.includes('lock') || em.includes('File descriptor')) {
+          console.warn("[qvac-host] registryGetModel fd-lock, using static descriptor for", input);
+        } else {
+          console.error("[qvac-host] registryGetModel failed, falling back to static for", input, em);
+        }
+      }
+    }
+    return desc;
   }
+
+  // Expand ~ 
+  if (typeof input === "string" && input.startsWith("~/")) {
+    return path.join(os.homedir(), input.slice(2));
+  }
+
+  // For unknown names, just return as-is (SDK will give clear MODEL_NOT_FOUND if not valid).
+  // Special support for DeepSeek using direct registry url for official HF GGUF.
+  if (input === "DEEPSEEK_R1_7B") {
+    return {
+      src: "registry://hf/unsloth/DeepSeek-R1-Distill-Qwen-7B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf",
+      name: "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M",
+      // other fields optional
+    };
+  }
+
   return input;
 }
 
@@ -135,10 +189,44 @@ const clientRuns = new Map();
 
 let providerReady = false;
 
+/**
+ * Remove a stale ~/.qvac/.worker.lock left behind by an ungraceful exit
+ * (e.g. `tauri dev` SIGKILLing the app on a Rust recompile). Only removes the
+ * lock when the pid that wrote it is no longer alive — never touches a lock
+ * held by a live worker. Prevents "File descriptor could not be locked".
+ */
+function clearStaleWorkerLock() {
+  const lockPath = path.join(os.homedir(), ".qvac", ".worker.lock");
+  try {
+    if (!fs.existsSync(lockPath)) return;
+    const raw = fs.readFileSync(lockPath, "utf8");
+    let pid = null;
+    try { pid = JSON.parse(raw)?.pid; } catch {}
+    let alive = false;
+    if (pid) {
+      try { process.kill(pid, 0); alive = true; } catch { alive = false; }
+    }
+    if (!alive) {
+      fs.rmSync(lockPath, { force: true });
+      console.error("[qvac-host] Removed stale .worker.lock (pid", pid, "not alive)");
+    }
+  } catch (e) {
+    console.error("[qvac-host] clearStaleWorkerLock error:", e?.message || e);
+  }
+}
+
 async function ensureProvider() {
   if (providerReady) return;
   console.error("[qvac-host] Starting QVAC provider...");
-  await startQVACProvider();
+  clearStaleWorkerLock();
+  try {
+    await startQVACProvider();
+  } catch (e) {
+    // Reset flag so next attempt can retry (e.g. after bare fix or address freed)
+    providerReady = false;
+    console.error("[qvac-host] startQVACProvider failed:", e?.message || e);
+    throw e;
+  }
   providerReady = true;
   console.error("[qvac-host] QVAC provider ready");
 }
@@ -166,9 +254,16 @@ async function handleCommand(clientId, cmd, params = {}) {
         const { modelSrc: rawSrc, modelType = "llamacpp-completion", modelConfig = {} } = params;
         if (!rawSrc) throw new Error("modelSrc is required");
 
-        // Resolve string registry names (the ones persisted in settings / used in UI)
-        // to the full descriptor objects the SDK needs for real registry:// downloads.
-        const modelSrc = resolveModelSrc(rawSrc);
+        // Resolve using official registry (gets the right build for current OS/arch)
+        const modelSrc = await resolveModelDescriptor(rawSrc);
+
+        // If this looks like a local file path (not a registry descriptor object),
+        // validate it exists before calling the SDK so the user gets a clear error.
+        if (typeof modelSrc === "string" && (modelSrc.startsWith("/") || modelSrc.startsWith("C:\\") || modelSrc.includes(":\\"))) {
+          if (!fs.existsSync(modelSrc)) {
+            throw new Error(`Local model file not found: ${modelSrc}\nMake sure the path is correct and the file exists.`);
+          }
+        }
 
         const opts = {
           modelSrc,
@@ -181,8 +276,19 @@ async function handleCommand(clientId, cmd, params = {}) {
 
         // Always wire onProgress so downloads (first-time registry models) report back.
         // Progress is forwarded as NDJSON "progress" messages before the final ack.
+        // The SDK emits { downloaded, total, percentage }; normalize to the
+        // { percentage, bytesLoaded, bytesTotal } shape the bridge/UI consumes.
         opts.onProgress = (progress) => {
-          send({ id: clientId, type: "progress", progress });
+          const p = progress && typeof progress === "object" ? progress : {};
+          send({
+            id: clientId,
+            type: "progress",
+            progress: {
+              percentage: p.percentage,
+              bytesLoaded: p.downloaded ?? p.bytesLoaded,
+              bytesTotal: p.total ?? p.bytesTotal,
+            },
+          });
         };
 
         const modelId = await loadModel(opts);
@@ -196,6 +302,67 @@ async function handleCommand(clientId, cmd, params = {}) {
           await unloadModel({ modelId });
         }
         send({ id: clientId, type: "ack", result: { ok: true } });
+        break;
+      }
+
+      case "clearCache": {
+        // Two distinct things can be "cached":
+        //   1. Downloaded model weights in ~/.qvac/models — the source of
+        //      "file descriptor could not be locked" and stale/partial downloads.
+        //   2. The SDK KV inference cache (deleteCache, which only accepts
+        //      { all: true } or { kvCacheKey, modelId? } — NOT { src }).
+        // The UI "Clear model cache" button calls this with no src to fully reset.
+        const src = params?.src || params?.modelSrc;
+        const result = { ok: true, deletedFiles: [], kvCleared: false };
+
+        // (1) Delete model weight files. With a src we match best-effort on
+        // distinctive name tokens; with no src we clear the whole dir.
+        try {
+          const modelsDir = path.join(os.homedir(), ".qvac", "models");
+          if (fs.existsSync(modelsDir)) {
+            const tokens =
+              typeof src === "string"
+                ? src
+                    .split(/[^a-z0-9]+/i)
+                    .filter((t) => t.length >= 4)
+                    .map((t) => t.toLowerCase())
+                : null;
+            for (const f of fs.readdirSync(modelsDir)) {
+              const lower = f.toLowerCase();
+              const matches = !tokens || tokens.length === 0 || tokens.some((t) => lower.includes(t));
+              if (!matches) continue;
+              try {
+                fs.rmSync(path.join(modelsDir, f), { recursive: true, force: true });
+                result.deletedFiles.push(f);
+              } catch (e) {
+                console.error("[qvac-host] clearCache could not delete", f, e?.message || e);
+              }
+            }
+          }
+        } catch (e) {
+          console.error("[qvac-host] clearCache models dir error:", e?.message || e);
+        }
+
+        // (2) Clear the SDK KV inference cache (correct signature).
+        try {
+          if (deleteCache) {
+            await deleteCache({ all: true });
+            result.kvCleared = true;
+          }
+        } catch (e) {
+          console.error("[qvac-host] clearCache KV cache error:", e?.message || e);
+        }
+
+        send({ id: clientId, type: "ack", result });
+        break;
+      }
+
+      case "cancelLoad": {
+        // Client wants to abort a model download.
+        // We can't abort the in-flight await loadModel(opts) from the SDK without
+        // killing the worker, but we ACK so the bridge can reject the promise.
+        // The UI layer also calls clearModelCache to delete any partial file.
+        send({ id: clientId, type: "ack", result: { cancelled: true } });
         break;
       }
 
@@ -309,7 +476,7 @@ async function handleCommand(clientId, cmd, params = {}) {
           send({ id: clientId, type: "ack", result: { docCount: 0, chunkCount: 0 } });
           break;
         }
-        const embedModelId = resolveModelSrc(rawEmbed);
+        const embedModelId = await resolveModelDescriptor(rawEmbed);
         const embedModel = await loadModel({ modelSrc: embedModelId, modelType: "embeddings" });
         const ingestResult = await ragIngest({
           modelId: embedModel,
@@ -325,7 +492,7 @@ async function handleCommand(clientId, cmd, params = {}) {
       case "ragSearch": {
         const { query, workspace = "cortex-kb", embedModelId: rawEmbed = "EMBEDDINGGEMMA_300M_Q4_0", topK = 5 } = params;
         if (!query) throw new Error("query is required");
-        const embedModelId = resolveModelSrc(rawEmbed);
+        const embedModelId = await resolveModelDescriptor(rawEmbed);
         const embedModel = await loadModel({ modelSrc: embedModelId, modelType: "embeddings" });
         const results = await ragSearch({ modelId: embedModel, query, workspace, topK });
         send({ id: clientId, type: "ack", result: { results: results || [] } });
@@ -333,9 +500,6 @@ async function handleCommand(clientId, cmd, params = {}) {
       }
 
       case "listModels": {
-        const os = require('os');
-        const path = require('path');
-        const fs = require('fs');
         const modelsDir = path.join(os.homedir(), '.qvac', 'models');
         let files = [];
         try {

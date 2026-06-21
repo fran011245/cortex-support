@@ -6,6 +6,7 @@
 
 import { Store } from "@tauri-apps/plugin-store";
 import { DEFAULT_SYSTEM_PROMPT, DEFAULT_TONE_RULES, type ToneRules } from "./prompts";
+import type { AgentProfileId } from "./agentProfiles";
 
 /**
  * Canonical registry constant *names* (strings) from @qvac/sdk.
@@ -24,6 +25,7 @@ const LLAMA_3_2_1B_INST_Q4_0 = "LLAMA_3_2_1B_INST_Q4_0" as const;
 const QWEN3_1_7B_INST_Q4 = "QWEN3_1_7B_INST_Q4" as const;
 const QWEN3_4B_INST_Q4_K_M = "QWEN3_4B_INST_Q4_K_M" as const;
 const EMBEDDINGGEMMA_300M_Q4_0 = "EMBEDDINGGEMMA_300M_Q4_0" as const;
+const DEEPSEEK_R1_7B = "DEEPSEEK_R1_7B" as const;
 
 export interface CSSettings {
   // 1. Agent core
@@ -34,6 +36,9 @@ export interface CSSettings {
 
   // 3. Response Style Presets (active selection)
   activeStylePreset: ToneRules["style"];
+
+  // Chosen agent profile (Wealth / Fintech / Crypto). Strongly recommended to set via wizard.
+  agentProfile?: AgentProfileId;
 
   // 4. General Usage
   defaultModelId: string; // user friendly id or path alias
@@ -71,18 +76,20 @@ export interface CSSettings {
  * See resolveModelSrc in src-tauri/qvac-host.cjs and the DEBUG doc.
  */
 export const RECOMMENDED_LLM_MODELS = [
-  { id: LLAMA_3_2_1B_INST_Q4_0, label: "Llama 3.2 1B Instruct (Q4_0, ultra-light ~0.5-1GB, fast)" },
-  { id: QWEN3_1_7B_INST_Q4, label: "Qwen3 1.7B Instruct (Q4, excellent instruction following)" },
-  { id: QWEN3_4B_INST_Q4_K_M, label: "Qwen3 4B Instruct (Q4_K_M, strong quality still lightweight)" },
+  { id: LLAMA_3_2_1B_INST_Q4_0, label: "Llama 3.2 1B Instruct (Q4_0, ultra-light ~0.5-1GB, fastest)" },
+  { id: QWEN3_1_7B_INST_Q4, label: "Qwen3 1.7B Instruct (Q4, recommended balance of quality & speed)" },
+  { id: QWEN3_4B_INST_Q4_K_M, label: "Qwen3 4B Instruct (Q4_K_M, recommended best quality)" },
+  { id: DEEPSEEK_R1_7B, label: "DeepSeek R1 Distill 7B (Q4_K_M, strong reasoning - recommended)" },
 ] as const;
 
-export const DEFAULT_LLM_MODEL = RECOMMENDED_LLM_MODELS[0].id; // Primary: Llama 3.2 1B
+export const DEFAULT_LLM_MODEL = RECOMMENDED_LLM_MODELS[1].id; // Primary recommendation: Qwen3 1.7B (better quality than 1B)
 export const DEFAULT_EMBED_MODEL = EMBEDDINGGEMMA_300M_Q4_0;
 
 export const DEFAULT_SETTINGS: CSSettings = {
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
   toneRules: { ...DEFAULT_TONE_RULES },
   activeStylePreset: "Professional",
+  agentProfile: "crypto", // Default for backward compatibility; wizard will let users pick
   defaultModelId: DEFAULT_LLM_MODEL,
   temperature: 0.2,
   maxTokens: 1024,

@@ -15,7 +15,12 @@ import {
   Plus,
   Pencil,
   Trash2,
+  RotateCw,
+  ChevronDown,
+  Eye,
 } from "lucide-react";
+import { useToolModel } from "./useToolModel";
+import { ToolLoadingPanel } from "./ToolLoadingPanel";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import {
@@ -61,7 +66,9 @@ export function ResponseTemplates() {
   const [extraContext, setExtraContext] = useState("");
   const [output, setOutput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const [copied, setCopied] = useState(false);
+  const { statusText, ensureModelLoaded } = useToolModel("Generating professional reply…");
 
   // Custom templates + hidden builtins (both persisted in the same store)
   const [customTemplates, setCustomTemplates] = useState<CustomResponseTemplate[]>([]);
@@ -77,7 +84,6 @@ export function ResponseTemplates() {
   const [manageOpen, setManageOpen] = useState(false);
   const [manageSearch, setManageSearch] = useState("");
 
-  const currentModelId = useAgentStore((s) => s.currentModelId);
   const settings = useAgentStore((s) => s.settings);
 
   // Load persisted custom templates + hidden builtins on mount
@@ -162,15 +168,10 @@ Output only the final reply text.`;
         { role: "user" as const, content: task },
       ];
 
-      const modelId = currentModelId || settings?.defaultModelId || "";
-      if (!modelId) {
-        toast.error("Load a model first (use the button in chat header or Settings).");
-        setIsProcessing(false);
-        return;
-      }
+      const modelId = await ensureModelLoaded();
 
       let full = "";
-      await streamCompletion({
+      const result = await streamCompletion({
         modelId,
         history,
         temperature: settings?.temperature ?? 0.2,
@@ -181,8 +182,18 @@ Output only the final reply text.`;
         },
       });
 
-      setOutput(full.trim());
-      toast.success("Template generated");
+      const finalText = (result.text || full).trim();
+      setOutput(finalText);
+      if (finalText) {
+        toast.success("Template generated");
+      } else if (result.thinking?.trim()) {
+        // Reasoning model spent its budget thinking and never emitted a final answer.
+        toast.error("No final answer", {
+          description: "The model reasoned but didn't produce a reply. Try again or raise Max tokens in Settings.",
+        });
+      } else {
+        toast.error("No text returned", { description: "The model returned nothing. Try again." });
+      }
     } catch (e: any) {
       toast.error("Generation failed", { description: e?.message });
     } finally {
@@ -344,6 +355,12 @@ Output only the final reply text.`;
     (opt) => !hiddenBuiltins.includes(opt.key)
   );
 
+  // Human label of the currently selected scenario (for the persistent indicator)
+  const selectedName =
+    selected.kind === "builtin"
+      ? TEMPLATE_OPTIONS.find((o) => o.key === selected.key)?.label || "—"
+      : customTemplates.find((t) => t.id === selected.id)?.name || "—";
+
   // Filtered list for the Manage dialog (only customs for now, builtins are shown separately)
   const filteredCustoms = useMemo(() => {
     const q = manageSearch.trim().toLowerCase();
@@ -356,53 +373,13 @@ Output only the final reply text.`;
 
   return (
     <div className="space-y-6">
-      {/* Built-in templates (curated defaults — user can hide/remove some via Manage) */}
-      <div>
-        <div className="text-sm font-medium mb-2">Common ticket types</div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {visibleBuiltins.length === 0 ? (
-            <div className="col-span-2 text-xs text-muted-foreground border border-dashed border-[#1E293B] rounded-lg p-3">
-              All built-in templates are hidden. Open <span className="font-medium">Manage</span> to restore some.
-            </div>
-          ) : (
-            visibleBuiltins.map((opt) => (
-            <button
-              key={opt.key}
-              onClick={() => setSelected({ kind: "builtin", key: opt.key })}
-              className={cn(
-                "group text-left rounded-xl border p-3 transition hover:border-[#3B82F6]/40 relative",
-                isBuiltinSelected(opt.key)
-                  ? "border-[#3B82F6] bg-[#121827]"
-                  : "border-[#1E293B] bg-[#121827]/40"
-              )}
-            >
-              <div className="font-medium text-sm">{opt.label}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">{opt.desc}</div>
-
-              {/* Quick way to turn a builtin into a starting point for a custom */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleCustomizeBuiltin(opt.key, opt.label);
-                }}
-                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-[10px] px-1.5 py-0.5 rounded border border-[#3B82F6]/30 text-[#3B82F6] hover:bg-[#3B82F6]/10 transition"
-                title="Create custom template based on this"
-              >
-                Customize
-              </button>
-            </button>
-          ))
-          )}
-        </div>
-      </div>
-
-      {/* Custom templates (user-managed, persisted with dates) */}
+      {/* Unified scenario picker — built-ins + customs as peers */}
       <div>
         <div className="flex items-center justify-between mb-2">
           <div className="text-sm font-medium">
-            Your custom templates
+            Scenarios
             {customTemplates.length > 0 && (
-              <span className="ml-1 text-muted-foreground">({customTemplates.length})</span>
+              <span className="ml-1.5 text-muted-foreground font-normal">· {customTemplates.length} custom</span>
             )}
           </div>
           <div className="flex items-center gap-1.5">
@@ -428,12 +405,42 @@ Output only the final reply text.`;
 
         {isLoadingTemplates ? (
           <div className="text-xs text-muted-foreground py-2">Loading your templates…</div>
-        ) : customTemplates.length === 0 ? (
-          <div className="text-xs text-muted-foreground py-2 border border-dashed border-[#1E293B] rounded-lg px-3 py-3">
-            No custom templates yet. Add your team’s recurring scenarios (e.g. “VIP corporate withdrawal”, “High-volume deposit review”).
+        ) : visibleBuiltins.length === 0 && customTemplates.length === 0 ? (
+          <div className="text-xs text-muted-foreground py-3 border border-dashed border-[#1E293B] rounded-lg px-3">
+            No scenarios available. <span className="font-medium">Add</span> your team’s recurring cases, or restore the built-in ones from <span className="font-medium">Manage</span>.
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {/* Built-in scenarios */}
+            {visibleBuiltins.map((opt) => (
+              <button
+                key={opt.key}
+                onClick={() => setSelected({ kind: "builtin", key: opt.key })}
+                className={cn(
+                  "group text-left rounded-xl border p-3 transition hover:border-[#3B82F6]/40 relative",
+                  isBuiltinSelected(opt.key)
+                    ? "border-[#3B82F6] bg-[#121827]"
+                    : "border-[#1E293B] bg-[#121827]/40"
+                )}
+              >
+                <div className="font-medium text-sm">{opt.label}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{opt.desc}</div>
+
+                {/* Quick way to turn a builtin into a starting point for a custom */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCustomizeBuiltin(opt.key, opt.label);
+                  }}
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-[10px] px-1.5 py-0.5 rounded border border-[#3B82F6]/30 text-[#3B82F6] hover:bg-[#3B82F6]/10 transition"
+                  title="Create custom template based on this"
+                >
+                  Customize
+                </button>
+              </button>
+            ))}
+
+            {/* Custom scenarios */}
             {customTemplates.map((tpl) => (
               <button
                 key={tpl.id}
@@ -445,20 +452,19 @@ Output only the final reply text.`;
                     : "border-[#1E293B] bg-[#121827]/40"
                 )}
               >
-                <div className="font-medium text-sm pr-14">{tpl.name}</div>
-                {tpl.description && (
+                <div className="flex items-center gap-1.5 pr-14">
+                  <span className="font-medium text-sm truncate">{tpl.name}</span>
+                  <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded bg-[#1E293B] text-muted-foreground">Custom</span>
+                </div>
+                {tpl.description ? (
                   <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
                     {tpl.description}
                   </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground/60 mt-0.5">
+                    Updated {formatDistanceToNow(new Date(tpl.updatedAt), { addSuffix: true })}
+                  </div>
                 )}
-
-                {/* Date */}
-                <div className="mt-1.5 text-[10px] text-muted-foreground/70">
-                  Created {formatDistanceToNow(new Date(tpl.createdAt), { addSuffix: true })}
-                  {tpl.updatedAt !== tpl.createdAt && (
-                    <> · updated {formatDistanceToNow(new Date(tpl.updatedAt), { addSuffix: true })}</>
-                  )}
-                </div>
 
                 {/* Admin actions (do not trigger selection) */}
                 <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition">
@@ -489,24 +495,57 @@ Output only the final reply text.`;
         )}
       </div>
 
-      <div>
-        <div className="text-sm font-medium mb-2">Extra context (optional)</div>
-        <Textarea
-          value={extraContext}
-          onChange={(e) => setExtraContext(e.target.value)}
-          placeholder="E.g. Customer TXID: abc123, amount 0.45 BTC, sent 3h ago, from external wallet..."
-          className="min-h-[90px] bg-[#121827] border-[#1E293B]"
-        />
+      {/* Compose zone: selected scenario + preview + extra context + generate */}
+      <div className="space-y-3 rounded-xl border border-[#1E293B] bg-[#121827]/30 p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-sm min-w-0">
+            <span className="text-muted-foreground">Selected:</span>{" "}
+            <span className="font-medium">{selectedName}</span>
+          </div>
+          <button
+            onClick={() => setShowPreview((v) => !v)}
+            className="shrink-0 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition"
+            title="Show the base scenario text that guides the model"
+          >
+            <Eye className="h-3 w-3" />
+            Preview
+            <ChevronDown className={cn("h-3 w-3 transition-transform", showPreview && "rotate-180")} />
+          </button>
+        </div>
+
+        {showPreview && (
+          <div className="glass border border-[#1E293B] rounded-lg p-3 max-h-40 overflow-auto whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">
+            {getSelectedBaseContent() || "This scenario has no base text."}
+          </div>
+        )}
+
+        <div>
+          <div className="text-xs text-muted-foreground mb-1.5">Extra context (optional)</div>
+          <Textarea
+            value={extraContext}
+            onChange={(e) => setExtraContext(e.target.value)}
+            placeholder="E.g. Customer TXID: abc123, amount 0.45 BTC, sent 3h ago, from external wallet..."
+            className="min-h-[90px] bg-[#121827] border-[#1E293B]"
+          />
+        </div>
+
+        <Button onClick={generate} disabled={isProcessing} className="btn-primary gap-2">
+          {isProcessing && <Loader2 className="h-4 w-4 animate-spin" />}
+          {isProcessing ? "Generating…" : "Generate Professional Reply"}
+        </Button>
       </div>
 
-      <Button onClick={generate} disabled={isProcessing} className="btn-primary gap-2">
-        {isProcessing && <Loader2 className="h-4 w-4 animate-spin" />}
-        Generate Professional Reply
-      </Button>
-
-      {output && (
+      {isProcessing && !output ? (
         <div className="space-y-2">
           <div className="text-sm font-medium">Generated response</div>
+          <ToolLoadingPanel statusText={statusText} minH="min-h-[140px]" />
+        </div>
+      ) : output ? (
+        <div className="space-y-2">
+          <div className="text-sm font-medium flex items-center gap-2">
+            Generated response
+            {isProcessing && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
+          </div>
           <div className="glass border border-[#1E293B] rounded-xl p-4 whitespace-pre-wrap text-sm leading-relaxed min-h-[140px]">
             {output}
           </div>
@@ -518,9 +557,13 @@ Output only the final reply text.`;
             <Button variant="ghost" onClick={useInChat} className="gap-2">
               Use as Response
             </Button>
+            <Button variant="ghost" onClick={generate} disabled={isProcessing} className="gap-2">
+              <RotateCw className="h-4 w-4" />
+              Regenerate
+            </Button>
           </div>
         </div>
-      )}
+      ) : null}
 
       <p className="text-xs text-muted-foreground">
         Generated using the live CS Agent prompt + tone rules from Settings. Great starting point — always review before sending.

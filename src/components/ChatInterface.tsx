@@ -8,10 +8,25 @@ import { cn, isMac } from "@/lib/utils";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { loadLocalModel, streamCompletion, initQVAC } from "@/lib/qvac";
+import { loadLocalModel, streamCompletion, initQVAC, type ModelDownloadProgress } from "@/lib/qvac";
 import { getEffectiveSystemPrompt, DEFAULT_LLM_MODEL, RECOMMENDED_LLM_MODELS } from "@/lib/settings";
 import { ModelStatus } from "@/components/ModelStatus";
 import { detectTicketType } from "@/lib/ticketDetection";
+
+/**
+ * Extract the customer-facing draft from an assistant message.
+ * Looks for text between the first and last double-quote in the response —
+ * the pattern the system prompt instructs the model to use for draft replies.
+ * Falls back to the full message when no quoted block is found.
+ */
+function extractDraft(text: string): { draft: string; isDraftExtracted: boolean } {
+  const first = text.indexOf('"');
+  const last = text.lastIndexOf('"');
+  if (first !== -1 && last > first + 50) {
+    return { draft: text.slice(first + 1, last).trim(), isDraftExtracted: true };
+  }
+  return { draft: text, isDraftExtracted: false };
+}
 
 /**
  * Minimalist formatter for model consumption stats.
@@ -117,7 +132,6 @@ export function ChatInterface() {
     removeLastAssistantMessage,
     isStreaming,
     setStreaming,
-    isLoading,
     setLoading,
     currentModelId,
     setModelId,
@@ -127,8 +141,9 @@ export function ChatInterface() {
 
   const [input, setInput] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedDraftId, setCopiedDraftId] = useState<string | null>(null);
   const [isLoadingModel, setIsLoadingModel] = useState(false);
-  const [loadProgress, setLoadProgress] = useState<{ percentage?: number } | null>(null);
+  const [loadProgress, setLoadProgress] = useState<ModelDownloadProgress | null>(null);
   const [ticketInput, setTicketInput] = useState("");
   const [isTicketPaneOpen, setIsTicketPaneOpen] = useState(false);
 
@@ -183,17 +198,13 @@ export function ChatInterface() {
     toast.success("Copied to clipboard");
   };
 
-  const handleUseAsResponse = (text: string) => {
-    copyToClipboard(text);
-    toast.info("Ready to paste into support ticket", { description: "Use ⌘V / Ctrl+V in your support tool" });
-  };
-
   const loadTestModel = async (modelSrcOverride?: string, silent = false) => {
     setIsLoadingModel(true);
     setLoadProgress(null);
     try {
       await initQVAC();
       const src = modelSrcOverride || settings?.defaultModelId || DEFAULT_LLM_MODEL;
+      // Reuse the cached download; loadLocalModel auto-clears + retries on a real lock error.
       const handle = await loadLocalModel({
         modelSrc: src,
         modelType: "llamacpp-completion",
@@ -206,7 +217,10 @@ export function ChatInterface() {
         toast.success("Model loaded", { description: `${label} ready` });
       }
     } catch (e: any) {
-      toast.error("Failed to load model", { description: e?.message || "Check console for errors" });
+      const msg = e?.message || "Check console for errors";
+      toast.error("Failed to load model after retry", { 
+        description: msg + ". Clear cache in Settings." 
+      });
     } finally {
       setIsLoadingModel(false);
       setLoadProgress(null);
@@ -553,17 +567,37 @@ export function ChatInterface() {
                     "rounded-2xl px-4 py-3 text-[14.5px] leading-relaxed",
                     msg.role === "user"
                       ? "bg-[#3B82F6] text-white rounded-br-md whitespace-pre-wrap"
-                      : "glass border border-white/5 rounded-bl-md",
+                      : "relative glass border border-white/5 rounded-bl-md pr-9",
                   )}
                 >
                   {msg.role === "assistant" ? (
                     <>
-                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-                        {msg.content || (msg.isStreaming ? "…" : "")}
-                      </ReactMarkdown>
-                      {msg.isStreaming && (
-                        <span className="inline-block w-1.5 h-4 ml-0.5 align-[-1px] bg-white/70 animate-pulse" />
+                      {/* Corner copy-all icon — appears on row hover */}
+                      {msg.content && !msg.isStreaming && (
+                        <button
+                          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-muted-foreground/40 hover:text-foreground hover:bg-white/5"
+                          onClick={() => copyToClipboard(msg.content, msg.id)}
+                          title="Copy full response"
+                        >
+                          {copiedId === msg.id
+                            ? <Check className="h-3 w-3" />
+                            : <Copy className="h-3 w-3" />}
+                        </button>
                       )}
+                      {msg.content ? (
+                        <>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                            {msg.content}
+                          </ReactMarkdown>
+                          {msg.isStreaming && (
+                            <span className="inline-block w-1.5 h-4 ml-0.5 align-[-1px] bg-white/70 animate-pulse" />
+                          )}
+                        </>
+                      ) : msg.isStreaming ? (
+                        <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Thinking…
+                        </span>
+                      ) : null}
                     </>
                   ) : (
                     msg.content
@@ -595,40 +629,50 @@ export function ChatInterface() {
                   </div>
                 )}
 
-                {msg.role === "assistant" && msg.content && !msg.isStreaming && (
-                  <div className="flex items-center gap-1.5 pl-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
-                      onClick={() => copyToClipboard(msg.content, msg.id)}
-                    >
-                      {copiedId === msg.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                      Copy
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-[#3B82F6]"
-                      onClick={() => handleUseAsResponse(msg.content)}
-                    >
-                      Use as response
-                    </Button>
-                    {/* Only show Regenerate on the last assistant message */}
-                    {idx === messages.length - 1 && (
+                {msg.role === "assistant" && msg.content && !msg.isStreaming && (() => {
+                  const { draft, isDraftExtracted } = extractDraft(msg.content);
+                  const isCopied = copiedDraftId === msg.id;
+                  return (
+                    <div className="pl-1 mt-1 flex items-center gap-2">
+                      {/* Primary CTA: always visible */}
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
-                        className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
-                        onClick={handleRegenerate}
-                        disabled={isStreaming}
+                        className={cn(
+                          "h-7 px-3 text-xs gap-1.5 transition-all",
+                          isDraftExtracted
+                            ? "border-emerald-500/25 text-emerald-400/90 hover:bg-emerald-500/10 hover:border-emerald-500/40 hover:text-emerald-400"
+                            : "border-border text-muted-foreground hover:text-foreground"
+                        )}
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(draft);
+                          setCopiedDraftId(msg.id);
+                          setTimeout(() => setCopiedDraftId(null), 1500);
+                          toast.success(isDraftExtracted ? "Draft copied" : "Response copied", {
+                            description: "⌘V / Ctrl+V to paste in your support tool",
+                          });
+                        }}
                       >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                        Regenerate
+                        {isCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                        {isCopied ? "Copied!" : isDraftExtracted ? "Copy draft" : "Copy response"}
                       </Button>
-                    )}
-                  </div>
-                )}
+
+                      {/* Regenerate — hover only, last message only */}
+                      {idx === messages.length - 1 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={handleRegenerate}
+                          disabled={isStreaming}
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          Regenerate
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               {msg.role === "user" && (
@@ -639,11 +683,6 @@ export function ChatInterface() {
             </div>
           ))}
 
-          {isLoading && messages.length > 0 && !messages[messages.length - 1]?.isStreaming && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground pl-10">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Thinking…
-            </div>
-          )}
         </div>
       </ScrollArea>
 
