@@ -85,7 +85,7 @@ jobs:
       # https://github.com/fran011245/cortex-support/releases/latest/download/Cortex.dmg
       - name: Upload stable Cortex.dmg (for landing page direct download)
         run: |
-          DMG=$(find target -name "Cortex_*_aarch64.dmg" | head -1)
+          DMG=$(find . -name "Cortex_*_aarch64.dmg" | head -1)
           if [ -f "$DMG" ]; then
             cp "$DMG" Cortex.dmg
             gh release upload ${{ github.ref_name }} Cortex.dmg --clobber
