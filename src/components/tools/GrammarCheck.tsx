@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Mail } from "lucide-react";
 import { useAgentStore } from "@/stores/useAgentStore";
 import { getEffectiveSystemPrompt } from "@/lib/settings";
 import { streamCompletion } from "@/lib/qvac";
@@ -14,6 +16,7 @@ export function GrammarCheck() {
   const [output, setOutput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [emailMode, setEmailMode] = useState(false);
 
   const settings = useAgentStore((s) => s.settings);
   const { statusText, ensureModelLoaded } = useToolModel("Improving your text…");
@@ -30,7 +33,24 @@ export function GrammarCheck() {
     try {
       const systemPrompt = await getEffectiveSystemPrompt();
 
-      const task = `Perform a Grammar & Style Check on the support-related text below.
+      const task = emailMode
+        ? `Rewrite the support-related text below as a clean, professional email, ready to send.
+
+Rules (in addition to the system prompt above):
+- Correct grammar, spelling, punctuation, and sentence structure.
+- Make it professional, direct, pragmatic, clear and concise.
+- Enforce professional support tone: no emojis, no fluff, no overly friendly language, be security-aware where relevant.
+- Structure it as an email: an opening greeting line, then the body in short paragraphs (use numbered steps or bullets where it improves clarity), then a closing line such as "Best regards,".
+- Use proper line breaks between the greeting, paragraphs, and closing.
+- Do NOT invent a sender name, signature, or contact details. End right after the closing line (e.g. "Best regards,").
+- Preserve all factual details, numbers, names, and the original intent exactly.
+- Output ONLY the email. Do not add meta comments like "Here's the email:" or explanations.
+
+Original text to turn into an email:
+${input.trim()}
+
+Email:`
+        : `Perform a Grammar & Style Check on the support-related text below.
 
 Rules (in addition to the system prompt above):
 - Correct grammar, spelling, punctuation, and sentence structure.
@@ -57,14 +77,29 @@ Improved version:`;
         modelId,
         history,
         temperature: Math.min(settings?.temperature ?? 0.2, 0.3), // low temp for style/grammar
-        maxTokens: 2048,
+        maxTokens: emailMode ? 3072 : 2048, // full emails run longer than a polished snippet
         onToken: (delta) => {
           full += delta;
           setOutput(full);
         },
       });
 
-      const finalText = (result.text || full).trim();
+      let finalText = (result.text || full).trim();
+
+      // In email mode, append the configured signature deterministically (no model hallucination).
+      if (emailMode && finalText) {
+        const custom = (settings?.emailSignature || "").trim();
+        const signature = custom
+          ? custom
+          : [settings?.emailSenderName, settings?.emailTeam]
+              .map((s) => (s || "").trim())
+              .filter(Boolean)
+              .join("\n");
+        if (signature) {
+          finalText = `${finalText}\n\n${signature}`;
+        }
+      }
+
       setOutput(finalText);
       if (finalText) {
         toast.success("Style & grammar improved");
@@ -110,10 +145,25 @@ Improved version:`;
         />
       </div>
 
+      <div className="flex items-center justify-between rounded-xl border border-[#1E293B] bg-[#121827] p-3">
+        <div className="flex items-center gap-2.5">
+          <Mail className="h-4 w-4 text-muted-foreground" />
+          <div>
+            <div className="text-sm font-medium">Email-ready format</div>
+            <div className="text-xs text-muted-foreground">
+              Structures the output as an email (greeting, body, sign-off) and appends your signature.
+            </div>
+          </div>
+        </div>
+        <Switch checked={emailMode} onCheckedChange={setEmailMode} disabled={isProcessing} />
+      </div>
+
       <div className="flex gap-3">
         <Button onClick={runCheck} disabled={isProcessing || !input.trim()} className="btn-primary gap-2">
           {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-          {isProcessing ? "Improving..." : "Improve with Professional Tone"}
+          {isProcessing
+            ? emailMode ? "Drafting..." : "Improving..."
+            : emailMode ? "Draft Email" : "Improve with Professional Tone"}
         </Button>
         {output && (
           <>
@@ -131,7 +181,7 @@ Improved version:`;
       {isProcessing && !output ? (
         <div>
           <div className="text-sm font-medium mb-2 flex items-center gap-2">
-            Improved version
+            {emailMode ? "Email draft" : "Improved version"}
             <span className="text-[10px] text-muted-foreground font-normal">(enforces current agent settings)</span>
           </div>
           <ToolLoadingPanel statusText={statusText} minH="min-h-[120px]" />
@@ -139,7 +189,7 @@ Improved version:`;
       ) : output ? (
         <div>
           <div className="text-sm font-medium mb-2 flex items-center gap-2">
-            Improved version
+            {emailMode ? "Email draft" : "Improved version"}
             {isProcessing && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
             <span className="text-[10px] text-muted-foreground font-normal">(enforces current agent settings)</span>
           </div>

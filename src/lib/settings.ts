@@ -52,6 +52,11 @@ export interface CSSettings {
   // Extra instructions appended to system prompt (powerful customization)
   extraInstructions?: string;
 
+  // Email signature — fixed values injected when "Email-ready format" is on in Grammar & Style
+  emailSenderName?: string; // name of the person signing
+  emailTeam?: string; // team / department (e.g. "Support Team")
+  emailSignature?: string; // optional multi-line custom signature; overrides name+team if set
+
   // UI preference (backlog item from usage stats polish)
   showUsageStats?: boolean;
 
@@ -98,6 +103,9 @@ export const DEFAULT_SETTINGS: CSSettings = {
   autoApplyGrammarCheck: true,
   showConfidenceAndSources: true,
   extraInstructions: "",
+  emailSenderName: "",
+  emailTeam: "",
+  emailSignature: "",
   knowledgeBaseLastIndexed: undefined,
   knowledgeBaseDocCount: 0,
   showUsageStats: true,

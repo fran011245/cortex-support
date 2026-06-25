@@ -536,6 +536,44 @@ export function SettingsModal() {
                 onChange={(e) => setAndPersist({ extraInstructions: e.target.value })}
               />
             </div>
+
+            <div className="pt-2 space-y-3 border-t border-border">
+              <div className="pt-2">
+                <Label className="text-xs">Email signature</Label>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Used when "Email-ready format" is enabled in Grammar &amp; Style — appended to the polished email.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Your name</Label>
+                  <Input
+                    placeholder="e.g. Jordan Pérez"
+                    className="mt-1.5 bg-card border-border"
+                    value={local.emailSenderName || ""}
+                    onChange={(e) => setAndPersist({ emailSenderName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Team / department</Label>
+                  <Input
+                    placeholder="e.g. Support Team"
+                    className="mt-1.5 bg-card border-border"
+                    value={local.emailTeam || ""}
+                    onChange={(e) => setAndPersist({ emailTeam: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Custom signature (optional)</Label>
+                <Textarea
+                  placeholder={"Overrides name + team above. E.g.\nJordan Pérez\nSupport Team — Acme\nsupport@acme.com"}
+                  className="mt-1.5 bg-card min-h-[72px] border-border"
+                  value={local.emailSignature || ""}
+                  onChange={(e) => setAndPersist({ emailSignature: e.target.value })}
+                />
+              </div>
+            </div>
           </TabsContent>
 
           {/* 4. General Usage Settings */}
