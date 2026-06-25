@@ -1,0 +1,40 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Tauri build artifacts (do not commit these - they are large and contain platform binaries)
+src-tauri/target/
+*.app
+*.dmg
+*.exe
+*.deb
+*.rpm
+bundle/
+gen/
+
+# QVAC / local model caches (user-specific, do not commit)
+**/.qvac/
+**/*-Q4*.gguf
+**/*-Q5*.gguf
+**/*-TQ2*.gguf
